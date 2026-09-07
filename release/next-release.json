@@ -1,9 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "ownerPackage": "REL-011",
   "releaseGapFamily": "next-release-candidate",
-  "state": "candidate-ready",
-  "candidateReady": true,
+  "state": "publication-failed",
+  "candidateReady": false,
   "candidateVersion": "0.7.0-rc.1",
   "candidateTag": "v0.7.0-rc.1",
   "npmDistTag": "next",
@@ -122,7 +122,9 @@
       ],
       "evidence": [
         "Build run 34106675136 completed success for the pre-admission checkpoint at 2026-09-07T10:12:50Z; the Release workflow revalidates the exact runtime candidate commit.",
-        "CodeQL default setup passed for the pre-admission checkpoint at 2026-09-07T09:34:58Z: Actions, JavaScript/TypeScript, and Ruby; error=0; warning=0; open alerts=0; security-events: read; same commit Build and CodeQL are enforced for the exact runtime candidate commit by the Release workflow."
+        "CodeQL default setup passed for the pre-admission checkpoint at 2026-09-07T09:34:58Z: Actions, JavaScript/TypeScript, and Ruby; error=0; warning=0; open alerts=0; security-events: read; same commit Build and CodeQL are enforced for the exact runtime candidate commit by the Release workflow.",
+        "Final Build run 34112508917 attempt 1 passed all 12 jobs for exact tag commit 5fe379306743ca752ae851f32fa38e6ff9502f2c at 2026-09-07T11:14:49Z.",
+        "CodeQL default setup run 34112508925 passed for the same commit 5fe379306743ca752ae851f32fa38e6ff9502f2c at 2026-09-07T10:40:16Z with Actions, JavaScript/TypeScript, and Ruby analyses; error=0; warning=0; open alerts=0; security-events: read."
       ]
     },
     {
@@ -136,16 +138,65 @@
       "evidence": [
         "Candidate-ready policy records no commit hash; tag admission compares the peeled runtime candidate commit with a fresh origin/main readback.",
         "Repository ruleset 22261144 Protect release tags read back active for target tag including refs/tags/v* with exact update and deletion rules, bypass_actors=[], current_user_can_bypass=never.",
-        "Repository immutable releases setting read back enabled=true and enforced_by_owner=false before tag creation at 2026-09-07T10:21:17Z; the immutable-release environment blocks create-release until its required reviewer repeats the live read immediately before approval."
+        "Repository immutable releases setting read back enabled=true and enforced_by_owner=false before tag creation at 2026-09-07T11:23:31Z; the immutable-release environment blocks create-release until its required reviewer repeats the live read immediately before approval.",
+        "The fresh origin/main readback and lightweight protected v0.7.0-rc.1 tag both resolved to 5fe379306743ca752ae851f32fa38e6ff9502f2c immediately before the tag push; remote tag identity was verified at 2026-09-07T11:23:33Z. The failed tag remains unchanged and permanently unavailable for another attempt."
       ]
     },
     {
       "id": "tag-workflow-publication",
-      "state": "pending",
+      "state": "failed",
       "evidenceRequirements": [
         "The protected tag workflow publishes the first repository GitHub Release required to read back immutable=true, with the verified five-target assets, release attestation, and exact immutable npm package on next."
       ],
-      "evidence": []
+      "evidence": [
+        "Release run 34116379683 attempt 1 ended with failure at 2026-09-07T11:27:17Z for tag commit 5fe379306743ca752ae851f32fa38e6ff9502f2c. GitHub surface absent; npm surface absent. The exact v0.7.0-rc.1 identity is permanently closed and must not be reused.",
+        "Windows job 101724146947 failed Verify Committed Native Integrity at 2026-09-07T11:25:56Z: the x86_64-windows archive SHA-256 did not match the committed digest. All four other target jobs passed. Create Release, Publish to npm, and Verify Anonymous Public Delivery were skipped; no environment approval was issued.",
+        "Authenticated GitHub release discovery returned null and canonical npm zigcss/0.7.0-rc.1 returned HTTP 404 at 2026-09-07T11:36:56Z. npm latest remained 0.6.0 and next remained 0.6.0-rc.2; remote v0.7.0-rc.1 still resolved to 5fe379306743ca752ae851f32fa38e6ff9502f2c.",
+        "Diagnosis: commit 939286cac2c03b08eac15c35d20ce1df38c322bc changed Windows runtime output handling after inventory commit 4497948. A fresh Zig 0.15.2 ReleaseFast cross-build reproduced the exact-tag Build Windows archive byte-for-byte: 3926170 bytes, SHA-256 db62cb322a4a4ef83100a8b57b956a98e8f56e132d9ff01bd8bbe6d81799034f. The prior 3925146-byte archive has committed SHA-256 b3e07178b744cec613fdd6a712101d6168c5c1a58ad1251e21f77a4076030ea6.",
+        "The failed Release Windows archive itself was not uploaded, so its actual digest is not asserted. The same-commit Build archive independently reproduces the integrity rejection. The deterministic ZIP encoder is not the cause; Build lacked an archive-to-committed-inventory check before tagging. A new candidate requires regenerated five-target evidence and a pre-tag integrity gate, without changing this failed identity."
+      ]
     }
-  ]
+  ],
+  "publicationFailureEvidence": {
+    "tagCommit": "5fe379306743ca752ae851f32fa38e6ff9502f2c",
+    "finalBuildEvidence": {
+      "workflow": "Build",
+      "commit": "5fe379306743ca752ae851f32fa38e6ff9502f2c",
+      "runId": 34112508917,
+      "runAttempt": 1,
+      "conclusion": "success",
+      "completedAt": "2026-09-07T11:14:49Z"
+    },
+    "releaseWorkflowEvidence": {
+      "workflow": "Release",
+      "commit": "5fe379306743ca752ae851f32fa38e6ff9502f2c",
+      "runId": 34116379683,
+      "runAttempt": 1,
+      "conclusion": "failure",
+      "completedAt": "2026-09-07T11:27:17Z"
+    },
+    "githubSurface": {
+      "state": "absent",
+      "releaseId": null,
+      "releaseUrl": null,
+      "publishedAt": null,
+      "assetCount": 0,
+      "assetBytes": 0,
+      "assetInventorySha256": null,
+      "releaseAttestation": "absent"
+    },
+    "npmSurface": {
+      "state": "absent",
+      "version": "0.7.0-rc.1",
+      "distTag": "next",
+      "latest": "0.6.0",
+      "next": "0.6.0-rc.2",
+      "fileCount": 0,
+      "unpackedSize": 0,
+      "integrity": null,
+      "shasum": null,
+      "provenancePredicateType": null,
+      "anonymousInstall": "not-run"
+    }
+  }
 }

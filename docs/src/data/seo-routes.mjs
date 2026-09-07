@@ -39,13 +39,14 @@ export const routeMetadata = Object.freeze([
   },
   {
     canonicalPath: '/docs/guide/status/',
-    title: 'ZigCSS capability and release status',
-    description: 'Review the evidence-backed ZigCSS capability matrix, stable and experimental boundaries, release artifacts, and verification gates.',
+    title: 'ZigCSS 0.7.0-rc.1 failed release status',
+    description: 'Release 0.7.0-rc.1 failed; GitHub and npm surfaces are absent and the identity is closed. Stable 0.6.0 remains published; seven admission gates are historical.',
+    sourceOnly: true,
   },
   {
     canonicalPath: '/docs/guide/css-compatibility/',
-    title: 'ZigCSS Unreleased CSS compatibility matrix',
-    description: 'Review current-source ZigCSS parser, optimizer, prefixing, and extraction boundaries—not published stable 0.6.0 behavior.',
+    title: 'ZigCSS source-only CSS compatibility',
+    description: 'Source-only CSS compatibility after the failed 0.7.0-rc.1 release attempt. Its package was not published; stable 0.6.0 has a separate contract.',
     sourceOnly: true,
   },
   {
@@ -65,14 +66,14 @@ export const routeMetadata = Object.freeze([
   },
   {
     canonicalPath: '/docs/guide/builder-integrations/',
-    title: 'ZigCSS Unreleased builder and framework proofs',
-    description: 'Run current-source ZigCSS proofs for pinned JavaScript builders, frameworks, native build systems, and package managers—not stable 0.6.0 delivery.',
+    title: 'ZigCSS source-only builder and framework proofs',
+    description: 'Current-source ZigCSS proofs after failed release 0.7.0-rc.1: builders and package managers, not stable 0.6.0 delivery or a published rc.1 package.',
     sourceOnly: true,
   },
   {
     canonicalPath: '/docs/guide/recovery-cli/',
-    title: 'ZigCSS Unreleased CLI and recovery contract',
-    description: 'Inspect the current-source ZigCSS CLI and future package recovery contract, with explicit boundaries from published stable 0.6.0.',
+    title: 'ZigCSS source-only CLI and recovery contract',
+    description: 'Source-only ZigCSS CLI and recovery contract after failed release 0.7.0-rc.1. No rc.1 package was published; stable 0.6.0 remains available.',
     sourceOnly: true,
   },
 ])

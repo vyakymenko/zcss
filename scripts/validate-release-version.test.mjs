@@ -19,6 +19,8 @@ const activeVersion = '0.7.0-rc.1'
 const activeBaseVersion = '0.7.0'
 const publishedStableVersion = '0.6.0'
 const synchronizedSurfaceCount = 46
+const plannedImmutableIdentity = `\`v${activeVersion}\` must be the first true immutable GitHub Release.`
+const failedImmutableIdentity = `The failed tag \`v${activeVersion}\` is permanently closed; any new publication requires a newly authorized candidate version.`
 const closedPublicReleasePaths = Object.freeze([
   'NPM_PUBLISH.md',
   'docs/src/data/capabilities.json',
@@ -65,7 +67,18 @@ function cloneSources(currentSources = readReleaseSources()) {
   const sources = new Map(currentSources)
   const contract = JSON.parse(sources.get('release/next-release.json'))
   // Mutation fixtures start from planned source copy even after the real
-  // checkout is admitted. The separate on-disk test validates its real phase.
+  // checkout is admitted or a publication attempt fails before npm delivery.
+  // Validate the real phase before rewinding it; the separate on-disk test
+  // also validates the unchanged checkout directly, without normalization.
+  if (['candidate-ready', 'publication-failed'].includes(contract.state)) {
+    validateReleaseSources(currentSources)
+  }
+  if (contract.state === 'publication-failed') {
+    normalizeUnpublishedFailureCopy(sources, contract)
+    contract.schemaVersion = 1
+    contract.state = 'candidate-ready'
+    delete contract.publicationFailureEvidence
+  }
   if (contract.state === 'candidate-ready') {
     contract.state = 'planned'
     contract.candidateReady = false
@@ -102,6 +115,133 @@ function cloneSources(currentSources = readReleaseSources()) {
     )
   }
   return sources
+}
+
+function normalizeUnpublishedFailureCopy(sources, contract) {
+  const { githubSurface, npmSurface } = contract.publicationFailureEvidence
+  assert.equal(npmSurface.state, 'absent', 'only an npm-absent checkout can normalize to unpublished source fixtures')
+  const githubState = githubSurface.state
+  const verifiedPreTagGates = contract.gates.slice(0, -1).filter(gate => gate.state === 'verified').length
+  const surfaceSummary = `GitHub surface: \`${githubState}\`; npm surface: \`absent\`.`
+  const failedCapability = `Release attempt ${activeVersion} is publication-failed: GitHub ${githubState}; npm absent; exact identity permanently closed. The npm package surface is absent; source-checkout use remains available. Stable delivery remains 0.6.0.`
+  const plannedCapability = 'This active source candidate is unpublished; stable delivery remains 0.6.0.'
+
+  for (const [filename, current, replacement] of [
+    [
+      'docs/src/content/docs/guide/status.md',
+      `ZigCSS ${activeVersion} release attempt failed and the exact identity is permanently closed.\n\n${surfaceSummary}`,
+      `Active source candidate ${activeVersion} is selected in \`release/next-release.json\` but is not published.`,
+    ],
+    [
+      'docs/src/content/docs/guide/status.md',
+      'Its `candidateReady` interlock is `false` after the failed publication attempt',
+      'Its `candidateReady` interlock is `true` after all seven pre-tag gates passed',
+    ],
+    [
+      'docs/src/content/docs/guide/status.md',
+      `${verifiedPreTagGates} of 8 admission gates are verified; the publication terminal is failed and carries recorded failure evidence`,
+      '7 of 8 admission gates now carry recorded evidence',
+    ],
+    [
+      'docs/src/app/components/Home.tsx',
+      `${activeVersion} · failed release identity · do not reuse`,
+      `${activeVersion} · unpublished source proofs`,
+    ],
+    [
+      'docs/src/app/components/Home.tsx',
+      `${verifiedPreTagGates}/8 admission gates verified · publication failed`,
+      '7/8 admission gates verified',
+    ],
+    [
+      'docs/src/app/components/Home.tsx',
+      'candidateReady=false after failed publication',
+      'candidateReady=true after seven pre-tag gates passed',
+    ],
+    [
+      'docs/src/app/components/GettingStarted.tsx',
+      `Release attempt ${activeVersion} failed before npm publication; the exact identity is closed and stable latest remains ${publishedStableVersion}.`,
+      `Its active identity is the unpublished ${activeVersion} candidate.`,
+    ],
+    [
+      'docs/src/content/docs/guide/builder-integrations.md',
+      `After the failed ${activeVersion} release attempt, the current unpublished source checkout has`,
+      `The current unpublished ${activeVersion} source checkout has`,
+    ],
+    [
+      'docs/src/app/components/Features.tsx',
+      `Release attempt ${activeVersion} failed; GitHub ${githubState}; npm absent; exact identity permanently closed. The source evidence remains checkout-only.`,
+      `That evidence belongs to unpublished candidate ${activeVersion}.`,
+    ],
+    ['docs/src/content/docs/guide/status.md', failedCapability, plannedCapability],
+    [
+      'NPM_PUBLISH.md',
+      `Prerelease attempt \`zigcss@${activeVersion}\` failed and its exact identity is permanently closed. ${surfaceSummary} Select a new candidate version; never move, recreate, or reuse \`v${activeVersion}\`.`,
+      'It is currently `candidate-ready` with `candidateReady: true`; this selection does not authorize creating the tag or publishing either release surface.',
+    ],
+    [
+      'CHANGELOG.md',
+      `Prerelease attempt \`${activeVersion}\` failed; exact identity is permanently closed. GitHub surface \`${githubState}\`; npm surface \`absent\`. Select a new candidate version before another release attempt. Published stable identity remains immutable at \`${publishedStableVersion}\`.`,
+      `Prerelease target \`${activeVersion}\` is candidate-ready with \`candidateReady: true\` after all seven pre-tag gates passed. Published stable identity remains immutable at \`${publishedStableVersion}\`.`,
+    ],
+  ]) {
+    replace(sources, filename, current, replacement)
+  }
+  mutateJson(sources, 'docs/src/data/capabilities.json', metadata => {
+    const zigPackage = metadata.capabilities.find(capability => capability.id === 'zig-package')
+    assert.ok(zigPackage)
+    assert.ok(zigPackage.behavior.includes(failedCapability), 'failed capability fixture replacement was not found')
+    zigPackage.behavior = zigPackage.behavior.replace(failedCapability, plannedCapability)
+  })
+  for (const filename of ['docs/src/data/capabilities.json', 'docs/src/content/docs/guide/status.md']) {
+    replaceEvery(sources, filename, failedImmutableIdentity, plannedImmutableIdentity)
+  }
+
+  // Incident-specific prose is present in the maintained checkout, but not in
+  // alternate planned/ready/closed timelines. Only these reviewed annotations
+  // may be reversed; the original sources and their on-disk test stay intact.
+  for (const [filename, failed, planned] of [
+    [
+      'docs/src/content/docs/guide/status.md',
+      ' These seven gates record historical admission evidence, not a successful release.',
+      '',
+    ],
+    [
+      'docs/src/content/docs/guide/status.md',
+      'The tag-workflow publication gate failed; select a new candidate version before another release attempt.',
+      'Tag-workflow publication remains pending; no `0.7.0-rc.1` publication is claimed.',
+    ],
+    [
+      'docs/src/content/docs/guide/format-compatibility.md',
+      `The ZigCSS source checkout from the failed ${activeVersion} release attempt compiles CSS, SCSS, indented Sass, Less, and Stylus through self-contained native Zig paths; its exact package identity is permanently closed and was not published.`,
+      `The ZigCSS ${activeVersion} source candidate compiles CSS, SCSS, indented Sass, Less, and Stylus through self-contained native Zig paths; this candidate is not published.`,
+    ],
+    [
+      'docs/src/content/docs/guide/recovery-cli.md',
+      `The ZigCSS source checkout from the failed ${activeVersion} release attempt owns one combined command for CSS, SCSS, indented Sass, Less, and Stylus. Its exact package identity is permanently closed and was not published;`,
+      `The ZigCSS ${activeVersion} source-built candidate owns one combined command for CSS, SCSS, indented Sass, Less, and Stylus. It is not published;`,
+    ],
+    [
+      'NPM_PUBLISH.md',
+      '`release/next-release.json` records exact candidate',
+      '`release/next-release.json` selects exact candidate',
+    ],
+    [
+      'NPM_PUBLISH.md',
+      'This failed attempt created no immutable GitHub Release; a newly authorized candidate must satisfy that requirement under a new identity.',
+      plannedImmutableIdentity,
+    ],
+  ]) {
+    if (sources.get(filename).includes(failed)) replace(sources, filename, failed, planned)
+  }
+  for (const [filename, incidentPrefix] of [
+    ['docs/src/content/docs/guide/status.md', '[Release run 34116379683](https://github.com/vyakymenko/zigcss/actions/runs/34116379683) '],
+    ['NPM_PUBLISH.md', 'Release run [34116379683](https://github.com/vyakymenko/zigcss/actions/runs/34116379683) '],
+    ['CHANGELOG.md', 'Release run [34116379683](https://github.com/vyakymenko/zigcss/actions/runs/34116379683) '],
+  ]) {
+    const paragraphs = sources.get(filename).split('\n\n')
+    assert.ok(paragraphs.filter(paragraph => paragraph.startsWith(incidentPrefix)).length <= 1)
+    sources.set(filename, paragraphs.filter(paragraph => !paragraph.startsWith(incidentPrefix)).join('\n\n'))
+  }
 }
 
 function replace(sources, filename, current, replacement) {
@@ -588,6 +728,9 @@ function setPublicationFailedPhase(
   })
 
   const surfaceSummary = `GitHub surface: \`${githubState}\`; npm surface: \`${npmState}\`.`
+  for (const filename of ['docs/src/data/capabilities.json', 'docs/src/content/docs/guide/status.md']) {
+    replaceEvery(sources, filename, plannedImmutableIdentity, failedImmutableIdentity)
+  }
   if (npmState === 'published-exact') {
     replace(
       sources,
@@ -761,6 +904,77 @@ test('planned mutation fixtures remain independent of an admitted on-disk source
   const closed = cloneSources(admitted)
   setClosedPhase(closed)
   assert.deepEqual(validateReleaseSources(closed), validateReleaseSources(planned))
+})
+
+test('planned fixtures normalize valid npm-absent failure phases without changing their evidence or immutable README', () => {
+  const planned = cloneSources()
+  const expectedNormalized = new Map(planned)
+  // The capability fixture setters use canonical JSON formatting. Compare
+  // that representation even when the real planned checkout is compact JSON.
+  mutateJson(expectedNormalized, 'docs/src/data/capabilities.json', () => {})
+  for (const githubState of ['absent', 'draft', 'immutable-published']) {
+    for (const verifiedPreTagGates of [5, 6, 7]) {
+      const failed = new Map(planned)
+      setPublicationFailedPhase(failed, { githubState, npmState: 'absent', verifiedPreTagGates })
+      const failedSnapshot = new Map(failed)
+      const normalized = cloneSources(failed)
+
+      assert.deepEqual(normalized, expectedNormalized, `${githubState}: ${verifiedPreTagGates} verified pre-tag gates`)
+      assert.deepEqual(failed, failedSnapshot, 'normalization must preserve the real failed sources and terminal evidence')
+      assert.equal(normalized.get('README.md'), failed.get('README.md'), 'immutable README bytes cannot change')
+      assert.deepEqual(validateReleaseSources(normalized), validateReleaseSources(failed))
+      const normalizedContract = JSON.parse(normalized.get('release/next-release.json'))
+      assert.equal(normalizedContract.schemaVersion, 1)
+      assert.equal(normalizedContract.state, 'planned')
+      assert.equal(normalizedContract.candidateReady, false)
+      assert.equal(Object.hasOwn(normalizedContract, 'publicationFailureEvidence'), false)
+      assert.equal(Object.hasOwn(normalizedContract, 'publicationEvidence'), false)
+
+      const ready = new Map(normalized)
+      setCandidateReadyPhase(ready)
+      assert.deepEqual(validateReleaseSources(ready), validateReleaseSources(planned))
+      const closed = new Map(normalized)
+      setClosedPhase(closed)
+      assert.deepEqual(validateReleaseSources(closed), validateReleaseSources(planned))
+    }
+  }
+})
+
+test('failure fixture normalization rejects contradictory copy and cannot erase a published npm identity', () => {
+  const contradictory = cloneSources()
+  setPublicationFailedPhase(contradictory)
+  injectCopyProbe(contradictory, 'docs/src/content/docs/guide/status.md', `Release workflow succeeded for ${activeVersion}.`)
+  const contradictorySnapshot = new Map(contradictory)
+  assert.throws(() => cloneSources(contradictory), /status\.md failed publication success contradiction/)
+  assert.deepEqual(contradictory, contradictorySnapshot)
+
+  const published = cloneSources()
+  setPublicationFailedPhase(published, { githubState: 'immutable-published', npmState: 'published-exact' })
+  const publishedSnapshot = new Map(published)
+  assert.throws(() => cloneSources(published), /only an npm-absent checkout can normalize to unpublished source fixtures/)
+  assert.deepEqual(published, publishedSnapshot)
+  assert.equal(JSON.parse(published.get('release/next-release.json')).publicationFailureEvidence.npmSurface.state, 'published-exact')
+})
+
+test('release-artifact capability cannot advertise a failed immutable identity as a future candidate', () => {
+  for (const surfaces of [
+    { githubState: 'absent', npmState: 'absent' },
+    { githubState: 'immutable-published', npmState: 'published-exact' },
+  ]) {
+    const failed = cloneSources()
+    setPublicationFailedPhase(failed, surfaces)
+    replaceEvery(failed, 'docs/src/data/capabilities.json', failedImmutableIdentity, plannedImmutableIdentity)
+    assert.throws(() => validateReleaseSources(failed), /release-artifact failed immutable identity boundary/)
+
+    const contradictory = cloneSources()
+    setPublicationFailedPhase(contradictory, surfaces)
+    replaceEvery(contradictory, 'docs/src/data/capabilities.json', failedImmutableIdentity, `${failedImmutableIdentity} ${plannedImmutableIdentity}`)
+    assert.throws(() => validateReleaseSources(contradictory), /release-artifact failed immutable identity cannot remain a future candidate/)
+  }
+
+  const planned = cloneSources()
+  replaceEvery(planned, 'docs/src/data/capabilities.json', plannedImmutableIdentity, `${plannedImmutableIdentity} ${failedImmutableIdentity}`)
+  assert.throws(() => validateReleaseSources(planned), /release-artifact nonfailed immutable identity boundary/)
 })
 
 test('release version policy accepts state-aware candidate-ready and closed public copy', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router'
 import { GettingStarted } from './GettingStarted'
+import nextRelease from '../../../../release/next-release.json'
 
 function renderGettingStarted() {
   render(<BrowserRouter><GettingStarted /></BrowserRouter>)
@@ -25,6 +26,16 @@ describe('GettingStarted', () => {
   it('presents the exact native language and development-oracle boundary', () => {
     renderGettingStarted()
     expect(screen.getByText(/the source snapshot compiles css, scss, indented sass, less, and stylus through self-contained native zig frontends/i)).toBeInTheDocument()
+    if (nextRelease.state === 'publication-failed') {
+      const npmState = nextRelease.publicationFailureEvidence.npmSurface.state
+      expect(screen.getByText(/the source snapshot compiles css/i)).toHaveTextContent(
+        npmState === 'published-exact'
+          ? `Release attempt ${nextRelease.candidateVersion} failed after the exact npm package was published; npm next still serves it and stable latest remains 0.6.0.`
+          : `Release attempt ${nextRelease.candidateVersion} failed before npm publication; the exact identity is closed and stable latest remains 0.6.0.`,
+      )
+      expect(document.body.textContent).not.toContain(`Its active identity is the unpublished ${nextRelease.candidateVersion} candidate.`)
+      expect(document.body.textContent).not.toContain(`ZigCSS ${nextRelease.candidateVersion} is published on npm next`)
+    }
     expect(screen.getByText(/dart sass 1\.101\.0.*less 4\.9\.0.*stylus 0\.64\.0.*development-only reference oracles.*frozen 4\.6\.7 native baseline/i)).toBeInTheDocument()
     expect(screen.getByText(/does not enable arbitrary plugins/i)).toBeInTheDocument()
   })

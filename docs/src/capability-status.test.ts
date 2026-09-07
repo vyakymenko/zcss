@@ -10,6 +10,7 @@ const startMarker = '<!-- capability-status:start -->'
 const endMarker = '<!-- capability-status:end -->'
 const read = (relativePath: string) =>
   fs.readFileSync(path.join(repoRoot, relativePath), 'utf8')
+const nextRelease = JSON.parse(read('release/next-release.json'))
 
 function generatedTable(content: string): string {
   const start = content.indexOf(startMarker)
@@ -145,7 +146,10 @@ describe('evidence-linked capability status metadata', () => {
     expect(byId.get('release-artifacts')?.behavior).toContain('one verified GitHub prerelease')
     expect(byId.get('release-artifacts')?.behavior).toContain('25 exact assets')
     expect(byId.get('release-artifacts')?.behavior).toContain('reads back `immutable: false`')
-    expect(byId.get('release-artifacts')?.behavior).toContain('first true immutable GitHub Release')
+    const retiredPublication = `The failed tag \`${nextRelease.candidateTag}\` is permanently closed; any new publication requires a newly authorized candidate version.`
+    const firstImmutablePublication = `\`${nextRelease.candidateTag}\` must be the first true immutable GitHub Release.`
+    expect(byId.get('release-artifacts')?.behavior).toContain(nextRelease.state === 'publication-failed' ? retiredPublication : firstImmutablePublication)
+    expect(byId.get('release-artifacts')?.behavior).not.toContain(nextRelease.state === 'publication-failed' ? firstImmutablePublication : retiredPublication)
     expect(byId.get('benchmark-report')?.statusKind).toBe('unavailable')
     expect(byId.get('benchmark-report')?.behavior).toContain('machine-attested Linux x64 bare metal')
     expect(byId.get('benchmark-report')?.behavior).toContain('no archive is selected')

@@ -579,9 +579,17 @@ export function validateReleaseSources(sources) {
     'only deployment pattern `v*` of type `tag` (policy ID 59095548)',
     'no stored secrets',
     'required reviewer repeats both live readbacks immediately before approval',
-    '`v0.7.0-rc.1` must be the first true immutable GitHub Release',
   ]) {
     expectContains(releaseArtifactBehavior, fragment, 'release-artifact immutable approval capability')
+  }
+  const plannedImmutableIdentity = `\`${nextRelease.candidateTag}\` must be the first true immutable GitHub Release.`
+  const failedImmutableIdentity = `The failed tag \`${nextRelease.candidateTag}\` is permanently closed; any new publication requires a newly authorized candidate version.`
+  if (nextReleasePhase.state === 'publication-failed') {
+    expectContains(releaseArtifactBehavior, failedImmutableIdentity, 'release-artifact failed immutable identity boundary')
+    expectNotContains(releaseArtifactBehavior, plannedImmutableIdentity, 'release-artifact failed immutable identity cannot remain a future candidate')
+  } else {
+    expectContains(releaseArtifactBehavior, plannedImmutableIdentity, 'release-artifact immutable approval capability')
+    expectNotContains(releaseArtifactBehavior, failedImmutableIdentity, 'release-artifact nonfailed immutable identity boundary')
   }
   expectContains(
     releaseArtifactBehavior,

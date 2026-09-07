@@ -79,9 +79,10 @@ function renderRoute(baseHtml, route, robots = 'index,follow,max-image-preview:l
       /<noscript>[\s\S]*?<\/noscript>/,
       `<noscript>
     <main>
-      <p>ZIGCSS · 0.7.0-RC.1 · CURRENT UNPUBLISHED SOURCE</p>
-      <h1>JavaScript is required for this source-only documentation route.</h1>
-      <p>This page documents the 0.7.0-rc.1 source candidate, not published stable 0.6.0. Build the repository source before using these capabilities.</p>
+      <p>ZIGCSS · 0.7.0-RC.1 · FAILED RELEASE IDENTITY · DO NOT REUSE</p>
+      <h1>JavaScript is required for this documentation route.</h1>
+      <p>Release attempt 0.7.0-rc.1 failed before GitHub or npm publication; its exact identity is permanently closed. These capabilities remain source-only, not published stable 0.6.0 behavior. Build the repository source before using them.</p>
+      <p>Stable 0.6.0 remains on npm latest; historical 0.6.0-rc.2 remains on next. Select a new candidate version for any new release attempt.</p>
       <p><a href="https://github.com/vyakymenko/zigcss">Open the ZigCSS source repository</a></p>
     </main>
   </noscript>`,
@@ -112,7 +113,9 @@ export function generateSeoPages(docsRoot = defaultDocsRoot) {
 
   for (const alias of routeAliases) {
     const output = path.join(distRoot, alias.outputPath.slice(1), 'index.html')
-    writeAtomically(output, renderRoute(baseHtml, alias, 'noindex,follow'))
+    const canonical = routeMetadata.find(route => route.canonicalPath === alias.canonicalPath)
+    if (canonical === undefined) fail(`alias canonical route is missing: ${alias.canonicalPath}`)
+    writeAtomically(output, renderRoute(baseHtml, { ...alias, sourceOnly: canonical.sourceOnly === true }, 'noindex,follow'))
   }
 
   const sitemap = [

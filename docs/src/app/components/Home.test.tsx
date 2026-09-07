@@ -81,6 +81,16 @@ describe('Home', () => {
       expect(verifiedGates).toBe({ planned: 5, 'candidate-ready': 7, closed: 8 }[phase])
     }
     expect(screen.getByText(readiness[phase], { exact: true })).toBeInTheDocument()
+    const identities = {
+      planned: `${nextRelease.candidateVersion} · unpublished source proofs`,
+      'candidate-ready': `${nextRelease.candidateVersion} · unpublished source proofs`,
+      closed: `${nextRelease.candidateVersion} · published prerelease · npm next`,
+      'publication-failed': `${nextRelease.candidateVersion} · failed release identity · do not reuse`,
+    }
+    expect(screen.getByText(identities[phase], { exact: true })).toBeInTheDocument()
+    for (const identity of new Set(Object.values(identities))) {
+      if (identity !== identities[phase]) expect(screen.queryByText(identity, { exact: true })).not.toBeInTheDocument()
+    }
     expect(screen.getByLabelText(/direct current-source builder adapters/i)).toHaveTextContent(/Vite.*Rollup.*esbuild.*Bun.*Webpack.*Rspack/)
     expect(screen.getByLabelText(/pinned current-source host proofs/i)).toHaveTextContent(/Next\.js.*Turbopack.*Webpack.*SvelteKit.*Astro.*Nuxt.*Parcel/)
     expect(screen.getByText(/exact checkout gates, not stable 0\.6\.0 framework packages/i)).toBeInTheDocument()

@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { BrowserRouter } from 'react-router'
 import { Features } from './Features'
 import capabilityMetadata from '../../data/capabilities.json'
+import nextRelease from '../../../../release/next-release.json'
 
 function renderFeatures() {
   return render(<BrowserRouter><Features /></BrowserRouter>)
@@ -14,6 +15,17 @@ describe('Features', () => {
     expect(screen.getByRole('heading', { name: /current capability status/i })).toBeInTheDocument()
     expect(screen.getByText(/not a compatibility promise/i)).toBeInTheDocument()
     expect(screen.getByText(/separates published stable 0\.6\.0 delivery from bounded current-source evidence/i)).toBeInTheDocument()
+    if (nextRelease.state === 'publication-failed') {
+      const failure = nextRelease.publicationFailureEvidence
+      const sourceBoundary = failure.npmSurface.state === 'published-exact'
+        ? 'The exact npm package remains public on next.'
+        : 'The source evidence remains checkout-only.'
+      expect(screen.getByText(/separates published stable 0\.6\.0 delivery/i)).toHaveTextContent(
+        `Release attempt ${nextRelease.candidateVersion} failed; GitHub ${failure.githubSurface.state}; npm ${failure.npmSurface.state}; exact identity permanently closed. ${sourceBoundary}`,
+      )
+      expect(document.body.textContent).not.toContain(`That evidence belongs to unpublished candidate ${nextRelease.candidateVersion}.`)
+      expect(document.body.textContent).not.toContain(`That evidence ships in published prerelease ${nextRelease.candidateVersion} on npm next.`)
+    }
     expect(screen.getByText(/REL-010 promotes only the stable 0\.6\.0 rows/i)).toBeInTheDocument()
     expect(screen.getByText(/rows whose contract says current, source-checkout, or Unreleased remain Unreleased/i)).toBeInTheDocument()
   })
