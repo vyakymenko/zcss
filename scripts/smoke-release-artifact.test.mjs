@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   compilerWarningForVersion,
   archiveExecutable,
+  installedNodeApiEsmSmokeProgram,
   lifecycleShellExecutable,
   nativePreprocessorSmokeCases,
   nativeSmokeTargets,
@@ -1227,7 +1228,7 @@ test('offline installed package exercises root CommonJS and ESM APIs against the
   assert.match(source, /import zigcss, \{ compileFile \} from 'zigcss'/)
   assert.match(source, /browsers: 'safari >= 7, ie >= 11'/)
   assert.match(source, /compileFile\(entry, \{ format: 'minified', sourceMap: true \}\)/)
-  assert.match(source, /result\.dependencies\[0\]\.url !== pathToFileURL\(dependency\)\.href/)
+  assert.match(source, /matchesCanonicalFileUrl\(result\.dependencies\[0\]\.url, expectedDependencyPath\)/)
   assert.match(source, /browsers: 'defaults'/)
   assert.match(source, /error instanceof zigcss\.ZigCssCompileError/)
   assert.match(source, /error\.code !== 'NODE_OPTIONS'/)
@@ -1235,6 +1236,81 @@ test('offline installed package exercises root CommonJS and ESM APIs against the
   assert.match(source, /const nodeApiSmokes = checkInstalledNodeApis\(consumer, nodeApiEnvironment\)/)
   assert.match(source, /validateRuntimeTrace\(\s*nodeApiRuntimeTrace,\s*nodeApiSmokes\.invocations,/)
   assert.match(source, /offlineNodeApiSmokes: nodeApiSmokes\.compilations,\s*offlineNodeApiOptionRejections: nodeApiSmokes\.optionRejections,\s*offlineNodeApiRuntimeTraces: nodeApiTrace\.invocations/)
+})
+
+test('packaged ESM smoke verifies exact canonical URLs through a filesystem path alias', () => {
+  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'zigcss-release-node-api-paths-'))
+  try {
+    const physicalRoot = path.join(temporary, 'physical ~ source')
+    const aliasRoot = path.join(temporary, 'alias')
+    const packageRoot = path.join(physicalRoot, 'node_modules', 'zigcss')
+    fs.mkdirSync(packageRoot, { recursive: true, mode: 0o700 })
+    fs.symlinkSync(physicalRoot, aliasRoot, process.platform === 'win32' ? 'junction' : 'dir')
+    fs.writeFileSync(path.join(physicalRoot, 'release-esm.less'), '.esm { color: red; }\n')
+    fs.writeFileSync(path.join(physicalRoot, 'release-esm-tokens.less'), '@color: red;\n')
+    assert.notEqual(
+      pathToFileURL(path.join(aliasRoot, 'release-esm.less')).href,
+      pathToFileURL(fs.realpathSync.native(path.join(aliasRoot, 'release-esm.less'))).href,
+    )
+    fs.writeFileSync(path.join(packageRoot, 'package.json'), JSON.stringify({
+      name: 'zigcss', type: 'module', exports: './index.mjs',
+    }))
+    fs.writeFileSync(path.join(packageRoot, 'index.mjs'), [
+      "import fs from 'node:fs'",
+      "import path from 'node:path'",
+      "import { pathToFileURL } from 'node:url'",
+      'export async function compileFile(filename) {',
+      "  const mode = process.env.ZIGCSS_SMOKE_URL_FIXTURE || 'canonical'",
+      "  const entry = mode === 'raw-alias' ? filename : fs.realpathSync.native(filename)",
+      "  const dependency = path.join(path.dirname(entry), 'release-esm-tokens.less')",
+      "  const source = mode === 'wrong-source' ? path.join(path.dirname(entry), 'wrong.less') : entry",
+      "  const imported = mode === 'wrong-dependency' ? path.join(path.dirname(entry), 'wrong.less') : dependency",
+      '  let sourceUrl = pathToFileURL(source).href',
+      '  let dependencyUrl = pathToFileURL(imported).href',
+      "  if (mode === 'native-url-escaping') sourceUrl = sourceUrl.replaceAll('%7E', '~')",
+      "  if (mode === 'native-url-escaping') dependencyUrl = dependencyUrl.replaceAll('%7E', '~')",
+      "  if (mode === 'query') sourceUrl += '?unexpected'",
+      "  if (mode === 'fragment') sourceUrl += '#unexpected'",
+      "  if (mode === 'remote') sourceUrl = sourceUrl.replace('file:///', 'file://remote/')",
+      "  if (mode === 'malformed') sourceUrl = 'file:///tmp/%2Fwrong.less'",
+      '  return Object.freeze({',
+      "    css: '.esm{color:red}', diagnostics: Object.freeze([]),",
+      '    sourceMap: Object.freeze({ sources: Object.freeze([sourceUrl]) }),',
+      "    dependencies: Object.freeze([Object.freeze({ kind: 'import', url: dependencyUrl })]),",
+      '  })',
+      '}',
+      'export default Object.freeze({ compileFile })',
+    ].join('\n'))
+    for (const [mode, expectedError] of [
+      ['canonical', null],
+      ['native-url-escaping', null],
+      ['raw-alias', 'ESM source map mismatch'],
+      ['wrong-source', 'ESM source map mismatch'],
+      ['wrong-dependency', 'ESM dependency mismatch'],
+      ['query', 'ESM source map mismatch'],
+      ['fragment', 'ESM source map mismatch'],
+      ['remote', 'ESM source map mismatch'],
+      ['malformed', 'ESM source map mismatch'],
+    ]) {
+      const env = { ...process.env, ZIGCSS_SMOKE_URL_FIXTURE: mode }
+      delete env.NODE_OPTIONS
+      const result = spawnSync(process.execPath, ['--input-type=module', '-e',
+        `process.cwd = () => process.argv[1]\n${installedNodeApiEsmSmokeProgram}`, aliasRoot,
+      ], { cwd: physicalRoot, encoding: 'utf8', env, timeout: 30_000 })
+      assert.equal(result.error, undefined)
+      if (expectedError === null) {
+        assert.equal(result.status, 0, result.stderr)
+        assert.equal(result.stdout, 'esm-node-api-ok\n')
+        assert.equal(result.stderr, '')
+      } else {
+        assert.notEqual(result.status, 0)
+        assert.ok(result.stderr.includes(expectedError), result.stderr)
+        assert.equal(result.stdout, '')
+      }
+    }
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true })
+  }
 })
 
 test('direct native archive runtime trace admits one native child and zero network access', () => {

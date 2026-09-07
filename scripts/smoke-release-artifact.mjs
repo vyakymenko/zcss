@@ -854,6 +854,37 @@ function checkNativePreprocessors(command, argsPrefix, working, environment, ver
   return nativePreprocessorSmokeCases.length
 }
 
+export const installedNodeApiEsmSmokeProgram = [
+  "import fs from 'node:fs'",
+  "import path from 'node:path'",
+  "import { fileURLToPath } from 'node:url'",
+  "import zigcss, { compileFile } from 'zigcss'",
+  "if (zigcss.compileFile !== compileFile) throw new Error('ESM root exports diverged')",
+  "const entry = path.join(process.cwd(), 'release-esm.less')",
+  "const dependency = path.join(process.cwd(), 'release-esm-tokens.less')",
+  // The public API resolves native filesystem identities, including Windows
+  // RUNNER~1 aliases. Expectations must use the same physical source files.
+  'const expectedEntryPath = fs.realpathSync.native(entry)',
+  'const expectedDependencyPath = fs.realpathSync.native(dependency)',
+  // Node and Zig spell equivalent URL escapes differently (for example ~).
+  // Decode URLs without resolving their paths, so raw aliases still fail.
+  'function matchesCanonicalFileUrl(value, expected) {',
+  "  if (typeof value !== 'string') return false",
+  '  try {',
+  '    const url = new URL(value)',
+  "    return url.protocol === 'file:' && url.hostname === '' && url.search === '' && url.hash === '' &&",
+  "      url.username === '' && url.password === '' && fileURLToPath(url) === expected",
+  '  } catch { return false }',
+  '}',
+  "const result = await compileFile(entry, { format: 'minified', sourceMap: true })",
+  "if (result.css !== '.esm{color:red}') throw new Error('ESM CSS mismatch')",
+  "if (result.sourceMap === null || !result.sourceMap.sources.some(url => matchesCanonicalFileUrl(url, expectedEntryPath))) throw new Error('ESM source map mismatch')",
+  "if (result.diagnostics.length !== 0 || result.dependencies.length !== 1) throw new Error('ESM result facts mismatch')",
+  "if (result.dependencies[0].kind !== 'import' || !matchesCanonicalFileUrl(result.dependencies[0].url, expectedDependencyPath)) throw new Error('ESM dependency mismatch')",
+  "if (!Object.isFrozen(result) || !Object.isFrozen(result.sourceMap) || !Object.isFrozen(result.dependencies) || !Object.isFrozen(result.dependencies[0])) throw new Error('ESM ownership mismatch')",
+  "process.stdout.write('esm-node-api-ok\\n')",
+].join('\n')
+
 function checkInstalledNodeApis(working, environment) {
   const cjsProgram = [
     "const path = require('node:path')",
@@ -914,22 +945,7 @@ function checkInstalledNodeApis(working, environment) {
   const entry = path.join(working, 'release-esm.less')
   fs.writeFileSync(dependency, '@color: red;\n')
   fs.writeFileSync(entry, '@import "release-esm-tokens.less"; .esm { color: @color; }\n')
-  const esmProgram = [
-    "import path from 'node:path'",
-    "import { pathToFileURL } from 'node:url'",
-    "import zigcss, { compileFile } from 'zigcss'",
-    "if (zigcss.compileFile !== compileFile) throw new Error('ESM root exports diverged')",
-    "const entry = path.join(process.cwd(), 'release-esm.less')",
-    "const dependency = path.join(process.cwd(), 'release-esm-tokens.less')",
-    "const result = await compileFile(entry, { format: 'minified', sourceMap: true })",
-    "if (result.css !== '.esm{color:red}') throw new Error('ESM CSS mismatch')",
-    "if (result.sourceMap === null || !result.sourceMap.sources.includes(pathToFileURL(entry).href)) throw new Error('ESM source map mismatch')",
-    "if (result.diagnostics.length !== 0 || result.dependencies.length !== 1) throw new Error('ESM result facts mismatch')",
-    "if (result.dependencies[0].kind !== 'import' || result.dependencies[0].url !== pathToFileURL(dependency).href) throw new Error('ESM dependency mismatch')",
-    "if (!Object.isFrozen(result) || !Object.isFrozen(result.sourceMap) || !Object.isFrozen(result.dependencies) || !Object.isFrozen(result.dependencies[0])) throw new Error('ESM ownership mismatch')",
-    "process.stdout.write('esm-node-api-ok\\n')",
-  ].join('\n')
-  const esm = child(process.execPath, ['--input-type=module', '-e', esmProgram], {
+  const esm = child(process.execPath, ['--input-type=module', '-e', installedNodeApiEsmSmokeProgram], {
     cwd: working,
     env: environment,
     label: 'offline installed ESM API smoke',

@@ -101,9 +101,12 @@ ZIGCSS_REAL_BINARY="$PWD/zig-out/bin/zigcss" npm run test:build-systems
 
 Every available local tool must pass clean, no-op, and native-dependency-change
 rebuilds with both the contract fixture and, when `ZIGCSS_REAL_BINARY` is set,
-the exact current-checkout compiler. CI requires all four toolchains and runs
-the real compiler through Make, Ninja, CMake, and Meson; an unavailable local
-tool is reported as an explicit skip. This build-system primitive is implemented
+the exact current-checkout compiler. CI explicitly installs all four toolchains
+from the runner's authenticated Ubuntu package repositories and checks their
+availability before the native test suite. It then runs the real compiler
+through Make, Ninja, CMake, and Meson; an unavailable local tool is reported as
+an explicit skip. These distribution packages are not content-addressed pins.
+This build-system primitive is implemented
 only in the current `Unreleased` checkout—no Bazel rule, Nx executor, Angular
 integration, or stable 0.6.0 delivery is claimed.
 

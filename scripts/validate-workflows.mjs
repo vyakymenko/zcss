@@ -361,6 +361,9 @@ export const buildSystemCiPolicy = Object.freeze({
   command: 'npm run test:build-systems',
   nativeBinary: '${{ github.workspace }}/zig-out/bin/zigcss',
   requireAll: '1',
+  setupTimeoutMinutes: 10,
+  setupPackages: Object.freeze(['make', 'ninja-build', 'cmake', 'meson']),
+  preflightCommand: "ZIGCSS_REQUIRE_BUILD_SYSTEMS=1 node --test --test-name-pattern='^CI-required build-system availability fails closed$' scripts/verify-build-system-examples.test.mjs",
 })
 
 export const zigTestSuitePolicy = Object.freeze({
@@ -1200,6 +1203,26 @@ export function validatePackageManagerWorkflowContract(buildWorkflow) {
 export function validateBuildSystemWorkflowContract(buildWorkflow) {
   const testJob = splitJobs(buildWorkflow, 'build.yml').get('test')?.join('\n')
   if (typeof testJob !== 'string') fail('build.yml Test Suite is unavailable')
+  const setupName = '      - name: Install required build-system toolchains'
+  const setupStep = [
+    setupName,
+    `        timeout-minutes: ${buildSystemCiPolicy.setupTimeoutMinutes}`,
+    '        shell: bash',
+    '        run: |',
+    '          set -euo pipefail',
+    '          apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=60)',
+    '          sudo apt-get "${apt_options[@]}" update --error-on=any',
+    `          sudo env DEBIAN_FRONTEND=noninteractive apt-get "\${apt_options[@]}" install --yes --no-install-recommends ${buildSystemCiPolicy.setupPackages.join(' ')}`,
+    '          make --version',
+    '          ninja --version',
+    '          cmake --version',
+    '          meson --version',
+    `          ${buildSystemCiPolicy.preflightCommand}`,
+  ].join('\n')
+  const setupSteps = testJob.split(/(?=^      - name: )/m).filter(step => step.startsWith(setupName))
+  if (setupSteps.length !== 1 || setupSteps[0].trimEnd() !== setupStep) {
+    fail('build.yml build-system setup must provision all four toolchains with bounded authenticated apt and a fail-closed availability preflight')
+  }
   const gateStep = [
     '      - name: Verify dependency-file build-system integrations',
     '        env:',
@@ -1216,6 +1239,11 @@ export function validateBuildSystemWorkflowContract(buildWorkflow) {
   }
   const debug = testJob.indexOf('run: node scripts/run-zig-test-suite.mjs --mode Debug')
   const gate = testJob.indexOf(gateStep)
+  const policy = testJob.indexOf('run: npm run test:workflows && npm run check:workflows')
+  const setup = testJob.indexOf(setupStep)
+  if (policy === -1 || setup <= policy || debug <= setup) {
+    fail('build.yml build-system setup and availability preflight must run after workflow policy and before the complete native Debug suite')
+  }
   if (debug === -1 || gate <= debug) {
     fail('build.yml build-system gate must run after the complete native Debug suite')
   }
@@ -1797,7 +1825,8 @@ export function validateNativeIntegrityWorkflowContract(sources) {
 }
 
 function parseJobTimeout(lines, job, filename = 'build.yml') {
-  const candidates = lines.filter(line => /^\s*timeout-minutes\s*:/.test(line))
+  // A nested step deadline supplements, but cannot replace, the job-wide budget.
+  const candidates = lines.filter(line => /^    timeout-minutes\s*:/.test(line))
   if (candidates.length !== 1) {
     fail(`${filename} job ${job} must declare exactly one hard timeout`)
   }

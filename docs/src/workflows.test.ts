@@ -196,6 +196,10 @@ describe('native artifact workflows', () => {
 
   test('audits every production graph, the full root development graph, and pinned host locks before native integration', () => {
     const exactNode = buildWorkflow.indexOf("node-version: '24.20.0'")
+    const workflowPolicy = buildWorkflow.indexOf('run: npm run test:workflows && npm run check:workflows')
+    const buildToolsSetup = buildWorkflow.indexOf('Install required build-system toolchains', workflowPolicy)
+    const buildToolsInstall = buildWorkflow.indexOf('install --yes --no-install-recommends make ninja-build cmake meson', buildToolsSetup)
+    const buildToolsPreflight = buildWorkflow.indexOf("ZIGCSS_REQUIRE_BUILD_SYSTEMS=1 node --test --test-name-pattern='^CI-required build-system availability fails closed$' scripts/verify-build-system-examples.test.mjs", buildToolsInstall)
     const extensionInstall = buildWorkflow.indexOf('Install VS Code extension dependencies')
     const policy = buildWorkflow.indexOf('npm run test:dependencies', extensionInstall)
     const audit = buildWorkflow.indexOf('npm run audit:production', policy)
@@ -237,6 +241,10 @@ describe('native artifact workflows', () => {
     const buildSystems = buildWorkflow.indexOf('run: npm run test:build-systems', requiredBuildSystems)
 
     expect(exactNode).toBeGreaterThan(-1)
+    expect(buildToolsSetup).toBeGreaterThan(workflowPolicy)
+    expect(buildToolsInstall).toBeGreaterThan(buildToolsSetup)
+    expect(buildToolsPreflight).toBeGreaterThan(buildToolsInstall)
+    expect(nativeTests).toBeGreaterThan(buildToolsPreflight)
     expect(extensionInstall).toBeGreaterThan(exactNode)
     expect(policy).toBeGreaterThan(extensionInstall)
     expect(audit).toBeGreaterThan(policy)

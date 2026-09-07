@@ -89,6 +89,41 @@ test('build-system CI makes every advertised toolchain mandatory', () => {
   )
 })
 
+test('build-system CI provisions and checks all four toolchains before the native suite', () => {
+  const source = cloneSources().get('build.yml')
+  const setup = source.split(/(?=^      - name: )/m)
+    .find(step => step.startsWith('      - name: Install required build-system toolchains'))?.trimEnd()
+  assert.ok(setup)
+  for (const replacement of [
+    '',
+    `${setup}\n\n${setup}`,
+    ...buildSystemCiPolicy.setupPackages.map(name => setup.replace(` ${name}`, '')),
+    setup.replace('--no-install-recommends', '--allow-unauthenticated'),
+    setup.replace('Acquire::Retries=2', 'Acquire::Retries=100'),
+    setup.replace('Acquire::http::Timeout=30', 'Acquire::http::Timeout=0'),
+    setup.replace('Acquire::https::Timeout=30', 'Acquire::https::Timeout=0'),
+    setup.replace('DPkg::Lock::Timeout=60', 'DPkg::Lock::Timeout=-1'),
+    setup.replace('timeout-minutes: 10', 'timeout-minutes: 240'),
+    setup.replace('update --error-on=any', 'update'),
+    setup.replace('meson --version', 'true'),
+    setup.replace(buildSystemCiPolicy.preflightCommand, 'true'),
+    `${setup}\n        if: false`,
+    `${setup}\n        continue-on-error: true`,
+  ]) {
+    assert.notEqual(replacement, setup)
+    assert.throws(
+      () => validateBuildSystemWorkflowContract(source.replace(setup, () => replacement)),
+      /build-system setup must provision all four toolchains/,
+    )
+  }
+  const debug = '        run: node scripts/run-zig-test-suite.mjs --mode Debug'
+  const afterNative = source.replace(`${setup}\n\n`, '').replace(debug, () => `${debug}\n\n${setup}`)
+  assert.throws(
+    () => validateBuildSystemWorkflowContract(afterNative),
+    /availability preflight must run after workflow policy and before the complete native Debug suite/,
+  )
+})
+
 test('workflow display names remain exact and unique', () => {
   assert.deepEqual(workflowDisplayNames, {
     'benchmarks.yml': 'Benchmarks',
