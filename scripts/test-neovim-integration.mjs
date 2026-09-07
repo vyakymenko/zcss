@@ -21,7 +21,7 @@ function run(command, args, options = {}) {
   return result
 }
 
-export function expectedNeovimRelease(configured = process.env.NEOVIM_TEST_VERSION) {
+export function expectedNeovimRelease(configured) {
   switch (configured) {
     case undefined:
     case '0.12.4':
@@ -33,7 +33,7 @@ export function expectedNeovimRelease(configured = process.env.NEOVIM_TEST_VERSI
   }
 }
 
-export function neovimCommand(configured = process.env.NVIM, release = expectedNeovimRelease()) {
+export function neovimCommand(configured, release = expectedNeovimRelease()) {
   if (configured === undefined || configured === '' || configured === 'nvim') return 'nvim'
   const candidates = release === '0.11.7'
     ? [
@@ -66,7 +66,7 @@ export function neovimCommand(configured = process.env.NVIM, release = expectedN
   throw new Error('NVIM must select the PATH command or a finite reviewed Neovim installation')
 }
 
-export function neovimZigcssPath(root = repositoryRoot, configured = process.env.ZIGCSS_LSP_PATH) {
+export function neovimZigcssPath(root = repositoryRoot, configured) {
   const expected = path.join(root, 'zig-out', 'bin', process.platform === 'win32' ? 'zigcss.exe' : 'zigcss')
   if (configured !== undefined && configured !== '' && configured !== expected) {
     throw new Error('ZIGCSS_LSP_PATH must identify the repository ReleaseFast binary')
@@ -107,7 +107,7 @@ function stableExecutable(filename, label) {
 }
 
 export function main() {
-  const expectedRelease = expectedNeovimRelease()
+  const expectedRelease = expectedNeovimRelease(process.env.NEOVIM_TEST_VERSION)
   const expectedVersion = `NVIM v${expectedRelease}`
   const nvim = neovimCommand(process.env.NVIM, expectedRelease)
   const version = run(nvim, ['--version'])
@@ -119,7 +119,10 @@ export function main() {
     throw new Error(`expected ${expectedVersion}, received ${versionLine}`)
   }
 
-  const zigcss = stableExecutable(neovimZigcssPath(), 'ZigCSS LSP executable')
+  const zigcss = stableExecutable(
+    neovimZigcssPath(repositoryRoot, process.env.ZIGCSS_LSP_PATH),
+    'ZigCSS LSP executable',
+  )
   const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'zigcss-neovim-'))
   try {
     const fixture = path.join(temporary, 'smoke.css')

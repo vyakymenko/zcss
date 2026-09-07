@@ -57,6 +57,9 @@ describe('experimental Neovim integration', () => {
     const root = read('README.md')
 
     expect(readme).toContain('Neovim 0.11.7 or later')
+    expect(readme).toContain('NVIM=nvim NEOVIM_TEST_VERSION=0.12.4 npm run test:neovim')
+    expect(readme).toContain('set `NEOVIM_TEST_VERSION=0.11.7`')
+    expect(readme).toContain('restricted to the runner\'s finite reviewed installation locations')
     expect(readme).toContain('Pull diagnostics')
     expect(readme).toContain('Declaration, implementation, signature help, code actions, formatting')
     expect(status).toContain('The Neovim integration uses the built-in configuration API')

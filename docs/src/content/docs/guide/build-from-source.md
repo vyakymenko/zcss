@@ -237,7 +237,7 @@ The independent parser gate additionally requires Node.js. After the Zig build h
 npm ci --ignore-scripts
 npm run test:prefix-data
 npm run check:prefix-data
-NVIM=/absolute/path/to/nvim npm run test:documentation
+NVIM=/usr/local/bin/nvim npm run test:documentation
 npm run check:documentation
 npm run test:dependencies
 npm run check:dependencies
@@ -248,7 +248,12 @@ npm run test:compat
 npm run test:transforms
 ```
 
-The documentation gate syntax-checks every tracked shell, JSON, Lua, and Vim fence, compiles every CSS fence, runs the compiled Zig examples through the build graph, and resolves every tracked internal Markdown/site link. Set `NVIM` to a Neovim 0.11.7-or-later executable so the checked Lua and Ex-command examples use the real editor parser without loading user configuration.
+The documentation gate syntax-checks every tracked shell, JSON, Lua, and Vim fence, compiles every CSS fence, runs the compiled Zig examples through the build graph, and resolves every tracked internal Markdown/site link. Set `NVIM` to the explicit absolute path of a trusted Neovim 0.11.7-or-later installation so the checked Lua and Ex-command examples use the real editor parser without loading user configuration. The example assumes `/usr/local/bin/nvim`; select your actual admitted installation, such as `/usr/bin/nvim`, `/opt/homebrew/bin/nvim`, or `$HOME/.local/bin/nvim`. Arbitrary executable locations are intentionally rejected.
+
+The separate headless LSP integration gate accepts `NVIM=nvim` from a trusted
+`PATH`. Select the exact installed editor with `NEOVIM_TEST_VERSION=0.11.7` or
+`0.12.4` (the default). Its policy helpers are independent of inherited environment
+settings; the runner explicitly selects and verifies the requested version.
 
 The dependency gate inventories the root package, documentation site, Next.js Turbopack example, SvelteKit example, Astro example, Nuxt example, and VS Code extension as seven exact npm manifest/version-3-lockfile pairs. It separately binds the local Parcel example as one exact dependency-free and script-free manifest whose Parcel toolchain is owned by the root lockfile; any additional package manifest or lockfile fails the inventory. The gate requires exact direct dependency versions; all four framework-host examples keep their host packages development-only and have empty production graphs. CI first audits all seven production lock graphs, then the complete root development graph—including Parcel 2.16.4—with `npm run audit:development`, then the complete documentation and VS Code build graphs, and finally the four full pinned Next.js, SvelteKit, Astro, and Nuxt host-lock audits. Any high or critical finding fails. The Pages workflow repeats the complete documentation build-graph audit before testing and building, and deploys only the exact commit from a successful same-repository `Build` push on `main`. The root audit covers the exact development-only Less 4.9.0 forward oracle and confirms that the former direct `image-size` 0.5.5 pin is absent; Less and Stylus image metadata instead share the bounded PNG/GIF/JPEG/SVG parser over resolver-owned bytes. The reviewed `.github/dependabot.yml` opens only bounded weekly version-update pull requests for the seven independently locked npm directories, GitHub Actions, and the root Docker ecosystem; the root-bound Parcel manifest receives dependency updates through the root directory and cannot declare its own dependency graph. The policy grants no automerge, registry credentials, publishing, or deployment authority. The build workflow's Test job uses exact Node 24.20.0 LTS for one maintained hosted runtime across the pinned Astro, Nuxt, and remaining JavaScript host gates; package engine ranges continue to define the broader supported consumer floor.
 

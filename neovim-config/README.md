@@ -70,12 +70,19 @@ Use Neovim's standard LSP commands and capability-aware mappings. Useful checks 
 
 ## Reproduce the checked integration
 
-Build ZigCSS, install the pinned Neovim version, and run:
+Build ZigCSS and put the trusted, exact Neovim 0.12.4 installation on `PATH`,
+then select that same version explicitly:
 
 ```bash
 zig build
-NVIM=/absolute/path/to/nvim npm run test:neovim
+NVIM=nvim NEOVIM_TEST_VERSION=0.12.4 npm run test:neovim
 ```
+
+To repeat the minimum-version proof, put the exact Neovim 0.11.7 installation
+first on `PATH` and set `NEOVIM_TEST_VERSION=0.11.7`. The runner checks the actual
+version before launching the integration. Explicit absolute `NVIM` paths are
+restricted to the runner's finite reviewed installation locations; arbitrary
+paths are not admitted.
 
 The test uses isolated XDG directories and does not read or modify the user's Neovim configuration.
 

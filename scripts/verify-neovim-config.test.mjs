@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   expectedNeovimRelease,
   neovimCommand,
@@ -78,10 +79,12 @@ test('CI pins and runs the real headless integration without a plugin framework'
 })
 
 test('integration tool selection is finite and repository-bound', () => {
+  assert.equal(expectedNeovimRelease(), '0.12.4')
   assert.equal(expectedNeovimRelease(undefined), '0.12.4')
   assert.equal(expectedNeovimRelease('0.11.7'), '0.11.7')
   assert.throws(() => expectedNeovimRelease('nightly'), /exactly 0\.11\.7 or 0\.12\.4/)
   assert.equal(neovimCommand(undefined, '0.12.4'), 'nvim')
+  assert.equal(neovimCommand(), 'nvim')
   assert.equal(
     neovimCommand('/home/runner/work/_temp/nvim-0.11.7/bin/nvim', '0.11.7'),
     '/home/runner/work/_temp/nvim-0.11.7/bin/nvim',
@@ -91,9 +94,90 @@ test('integration tool selection is finite and repository-bound', () => {
     /finite reviewed Neovim installation/,
   )
   const expectedZigcss = path.join(repositoryRoot, 'zig-out', 'bin', process.platform === 'win32' ? 'zigcss.exe' : 'zigcss')
+  assert.equal(neovimZigcssPath(), expectedZigcss)
+  assert.equal(neovimZigcssPath(repositoryRoot, undefined), expectedZigcss)
   assert.equal(neovimZigcssPath(repositoryRoot, expectedZigcss), expectedZigcss)
   assert.throws(
     () => neovimZigcssPath(repositoryRoot, '/tmp/attacker-controlled-zigcss'),
     /repository ReleaseFast binary/,
   )
+})
+
+test('Neovim helper defaults stay pure while main explicitly validates hosted and hostile environments', () => {
+  const probe = [
+    "import assert from 'node:assert/strict'",
+    "import childProcess from 'node:child_process'",
+    "import path from 'node:path'",
+    "import { syncBuiltinESMExports } from 'node:module'",
+    'const expected = JSON.parse(process.argv[3])',
+    'const calls = []',
+    'childProcess.spawnSync = (command, args) => {',
+    '  calls.push({ command, args })',
+    '  return {',
+    '    status: expected.versionSucceeds ? 0 : 1,',
+    "    stdout: `NVIM v${expected.release || '0.12.4'}\\n`,",
+    "    stderr: 'intentional version probe stop',",
+    '  }',
+    '}',
+    'syncBuiltinESMExports()',
+    'const { expectedNeovimRelease, neovimCommand, neovimZigcssPath, main } = await import(process.argv[1])',
+    'const root = process.argv[2]',
+    "const zigcss = path.join(root, 'zig-out', 'bin', process.platform === 'win32' ? 'zigcss.exe' : 'zigcss')",
+    "assert.equal(expectedNeovimRelease(), '0.12.4')",
+    "assert.equal(expectedNeovimRelease(undefined), '0.12.4')",
+    "assert.equal(neovimCommand(), 'nvim')",
+    "assert.equal(neovimCommand(undefined, '0.12.4'), 'nvim')",
+    'assert.equal(neovimZigcssPath(), zigcss)',
+    'assert.equal(neovimZigcssPath(root, undefined), zigcss)',
+    'assert.throws(() => main(), error => error.message.includes(expected.error))',
+    'assert.deepEqual(calls, expected.command === null ? [] : [{ command: expected.command, args: [\'--version\'] }])',
+    "process.stdout.write('explicit environment selection verified')",
+  ].join('\n')
+  const fixtures = [
+    {
+      env: {},
+      expected: { release: '0.12.4', command: 'nvim', error: 'Neovim version check failed' },
+    },
+    ...['0.11.7', '0.12.4'].map(release => ({
+      env: {
+        NEOVIM_TEST_VERSION: release,
+        NVIM: `/home/runner/work/_temp/nvim-${release}/bin/nvim`,
+      },
+      expected: {
+        release,
+        command: `/home/runner/work/_temp/nvim-${release}/bin/nvim`,
+        error: 'Neovim version check failed',
+      },
+    })),
+    {
+      env: { NEOVIM_TEST_VERSION: 'nightly', NVIM: '/tmp/unreviewed-nvim', ZIGCSS_LSP_PATH: '/tmp/unreviewed-zigcss' },
+      expected: { command: null, error: 'NEOVIM_TEST_VERSION must be exactly 0.11.7 or 0.12.4' },
+    },
+    {
+      env: { NEOVIM_TEST_VERSION: '0.12.4', NVIM: '/tmp/unreviewed-nvim' },
+      expected: { command: null, error: 'finite reviewed Neovim installation' },
+    },
+    {
+      env: { NEOVIM_TEST_VERSION: '0.12.4', NVIM: '/home/runner/work/_temp/nvim-0.11.7/bin/nvim' },
+      expected: { command: null, error: 'finite reviewed Neovim installation' },
+    },
+    {
+      env: { ZIGCSS_LSP_PATH: '/tmp/unreviewed-zigcss' },
+      expected: { release: '0.12.4', command: 'nvim', versionSucceeds: true, error: 'repository ReleaseFast binary' },
+    },
+  ]
+  for (const fixture of fixtures) {
+    const env = { ...process.env }
+    for (const name of ['NEOVIM_TEST_VERSION', 'NVIM', 'ZIGCSS_LSP_PATH', 'NODE_OPTIONS']) delete env[name]
+    Object.assign(env, fixture.env)
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', probe,
+      pathToFileURL(path.join(repositoryRoot, 'scripts', 'test-neovim-integration.mjs')).href,
+      repositoryRoot,
+      JSON.stringify(fixture.expected),
+    ], { encoding: 'utf8', env, timeout: 5_000, maxBuffer: 64 * 1024 })
+    assert.equal(result.error, undefined)
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.stdout, 'explicit environment selection verified')
+    assert.equal(result.stderr, '')
+  }
 })
