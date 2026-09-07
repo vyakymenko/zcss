@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "ownerPackage": "REL-011",
   "releaseGapFamily": "next-release-candidate",
-  "state": "planned",
-  "candidateReady": false,
+  "state": "candidate-ready",
+  "candidateReady": true,
   "candidateVersion": "0.7.0-rc.1",
   "candidateTag": "v0.7.0-rc.1",
   "npmDistTag": "next",
@@ -115,22 +115,29 @@
     },
     {
       "id": "hosted-validation",
-      "state": "pending",
+      "state": "verified",
       "evidenceRequirements": [
         "A recorded same-repository main Build run passes the complete test job and every architecture-matched build and provenance job for a pre-admission checkpoint, with its run ID and completion time stored without a commit hash.",
         "Recorded default-setup CodeQL analysis covers the Actions, JavaScript/TypeScript, and Ruby categories for the pre-admission checkpoint with no error or warning status and zero open CodeQL alerts; tag admission revalidates Build and CodeQL against the exact runtime candidate commit."
       ],
-      "evidence": []
+      "evidence": [
+        "Build run 34106675136 completed success for the pre-admission checkpoint at 2026-09-07T10:12:50Z; the Release workflow revalidates the exact runtime candidate commit.",
+        "CodeQL default setup passed for the pre-admission checkpoint at 2026-09-07T09:34:58Z: Actions, JavaScript/TypeScript, and Ruby; error=0; warning=0; open alerts=0; security-events: read; same commit Build and CodeQL are enforced for the exact runtime candidate commit by the Release workflow."
+      ]
     },
     {
       "id": "origin-main-integration",
-      "state": "pending",
+      "state": "verified",
       "evidenceRequirements": [
         "Candidate-ready evidence stores no candidate commit hash; after that contract is committed, tag admission requires the peeled runtime candidate commit to equal a fresh exact origin/main readback.",
         "Repository ruleset 22261144 (`Protect release tags`) is re-read immediately before tag admission as active for the tag target including `refs/tags/v*`, with exact update and deletion rules, no bypass actors, and `current_user_can_bypass: never`.",
         "Before tag creation, the repository immutable-releases endpoint records enabled=true and enforced_by_owner=false through a live admin read; the create-release job then waits on the immutable-release environment until its required reviewer repeats that live read immediately before approval."
       ],
-      "evidence": []
+      "evidence": [
+        "Candidate-ready policy records no commit hash; tag admission compares the peeled runtime candidate commit with a fresh origin/main readback.",
+        "Repository ruleset 22261144 Protect release tags read back active for target tag including refs/tags/v* with exact update and deletion rules, bypass_actors=[], current_user_can_bypass=never.",
+        "Repository immutable releases setting read back enabled=true and enforced_by_owner=false before tag creation at 2026-09-07T10:21:17Z; the immutable-release environment blocks create-release until its required reviewer repeats the live read immediately before approval."
+      ]
     },
     {
       "id": "tag-workflow-publication",

@@ -20,7 +20,6 @@ const activeBaseVersion = '0.7.0'
 const publishedStableVersion = '0.6.0'
 const synchronizedSurfaceCount = 46
 const closedPublicReleasePaths = Object.freeze([
-  'README.md',
   'NPM_PUBLISH.md',
   'docs/src/data/capabilities.json',
   'docs/src/content/docs/guide/status.md',
@@ -40,7 +39,6 @@ const closedPublicReleasePaths = Object.freeze([
   'examples/parcel/README.md',
 ])
 const closedNoUnreleasedPaths = Object.freeze([
-  'README.md',
   'docs/src/data/capabilities.json',
   'docs/src/content/docs/guide/status.md',
   'docs/src/content/docs/guide/builder-integrations.md',
@@ -76,7 +74,6 @@ function cloneSources(currentSources = readReleaseSources()) {
       gate.evidence = []
     }
     sources.set('release/next-release.json', `${JSON.stringify(contract, null, 2)}\n`)
-    replace(sources, 'README.md', '`candidateReady: true`', '`candidateReady: false`')
     replace(
       sources,
       'docs/src/content/docs/guide/status.md',
@@ -90,6 +87,7 @@ function cloneSources(currentSources = readReleaseSources()) {
       '5 of 8 admission gates now carry recorded evidence',
     )
     replace(sources, 'docs/src/app/components/Home.tsx', '7/8 admission gates verified', '5/8 admission gates verified')
+    replace(sources, 'docs/src/app/components/Home.tsx', 'candidateReady=true after seven pre-tag gates passed', 'candidateReady=false until seven pre-tag gates pass')
     replace(
       sources,
       'NPM_PUBLISH.md',
@@ -186,12 +184,7 @@ function setActiveSourceVersion(sources, version) {
   )
   const neovim = sources.get('neovim-config/README.md')
   sources.set('neovim-config/README.md', neovim.replaceAll(`ZigCSS ${previousVersion}`, `ZigCSS ${version}`))
-  replace(
-    sources,
-    'README.md',
-    `> **Active source candidate: ${previousVersion} — unpublished.**`,
-    `> **Active source candidate: ${version} — unpublished.**`,
-  )
+  replaceEvery(sources, 'README.md', previousVersion, version)
   replace(
     sources,
     'docs/src/content/docs/guide/status.md',
@@ -227,7 +220,6 @@ function setCandidateReadyPhase(sources) {
       if (gate.evidence.length === 0) gate.evidence = [`verified evidence for ${gate.id}`]
     }
   })
-  replace(sources, 'README.md', '`candidateReady: false`', '`candidateReady: true`')
   replace(
     sources,
     'docs/src/content/docs/guide/status.md',
@@ -246,6 +238,7 @@ function setCandidateReadyPhase(sources) {
     '5/8 admission gates verified',
     '7/8 admission gates verified',
   )
+  replace(sources, 'docs/src/app/components/Home.tsx', 'candidateReady=false until seven pre-tag gates pass', 'candidateReady=true after seven pre-tag gates passed')
   replace(
     sources,
     'NPM_PUBLISH.md',
@@ -271,86 +264,7 @@ function setClosedPhase(sources) {
     contract.publicationEvidence = { githubPublishedAt: '2026-09-04T12:34:00Z' }
   })
 
-  // README: close every candidate-delivery claim while retaining unrelated
-  // unpublished benchmark and separately unauthorized editor surfaces.
-  replace(
-    sources,
-    'README.md',
-    `Active source candidate \`${activeVersion}\` is unpublished.`,
-    `ZigCSS \`${activeVersion}\` is the published prerelease on npm \`next\`.`,
-  )
-  replace(
-    sources,
-    'README.md',
-    `> **Active source candidate: ${activeVersion} — unpublished.**`,
-    `> **Published prerelease: ${activeVersion} — npm \`next\`.**`,
-  )
-  replace(
-    sources,
-    'README.md',
-    '`candidateReady: true`',
-    '`candidateReady: false` after immutable publication',
-  )
-  replace(
-    sources,
-    'README.md',
-    'Historical npm version `0.6.0-rc.2` remains on `next`.',
-    `Historical npm version \`0.6.0-rc.2\` remains preserved by its immutable exact version.\n\nnpm \`next\` serves \`zigcss@${activeVersion}\`.`,
-  )
-  replace(
-    sources,
-    'README.md',
-    'GitHub prerelease and npm `next` publication are verified;',
-    'The historical GitHub prerelease and npm publication are verified;',
-  )
-  replace(
-    sources,
-    'README.md',
-    'it still is not registry delivery until matching native archives pass the release gates.',
-    'the published prerelease delivery is bound to its matching verified native archives.',
-  )
-  replace(
-    sources,
-    'README.md',
-    `The unpublished \`${activeVersion}\` package contract adds`,
-    `The published \`${activeVersion}\` prerelease package contract adds`,
-  )
-  replace(
-    sources,
-    'README.md',
-    'No published npm version currently exposes this new recovery command or integrity inventory.',
-    `Published \`zigcss@${activeVersion}\` exposes this recovery command and integrity inventory on npm \`next\`.`,
-  )
-  replace(
-    sources,
-    'README.md',
-    `The remaining CLI examples describe the current unpublished \`${activeVersion}\` source candidate`,
-    `The remaining CLI examples describe the published \`${activeVersion}\` prerelease and current source checkout`,
-  )
-  replace(
-    sources,
-    'README.md',
-    'The current `Unreleased` source package also exports',
-    `The published \`${activeVersion}\` prerelease package exports`,
-  )
-  replaceEvery(
-    sources,
-    'README.md',
-    `Its active identity is unpublished candidate \`${activeVersion}\`.`,
-    `Its published prerelease identity is \`zigcss@${activeVersion}\` on npm \`next\`.`,
-  )
-  replace(
-    sources,
-    'README.md',
-    'The current `Unreleased` source package adds explicit, typed adapter subpaths',
-    `The published \`${activeVersion}\` prerelease package adds explicit, typed adapter subpaths`,
-  )
-  replace(
-    sources,
-    'README.md',
-    `The adapters are part of the unpublished \`${activeVersion}\` source candidate`,
-    `The adapters ship in the published \`${activeVersion}\` prerelease`,
-  )
+  // Immutable README bytes stay neutral; only live publication surfaces change.
 
   // Primary status and site components.
   replace(
@@ -389,6 +303,7 @@ function setClosedPhase(sources) {
     '7/8 admission gates verified',
     '8/8 admission gates verified',
   )
+  replace(sources, 'docs/src/app/components/Home.tsx', 'candidateReady=true after seven pre-tag gates passed', 'candidateReady=false after immutable publication')
   replace(
     sources,
     'docs/src/app/components/GettingStarted.tsx',
@@ -673,26 +588,7 @@ function setPublicationFailedPhase(
   })
 
   const surfaceSummary = `GitHub surface: \`${githubState}\`; npm surface: \`${npmState}\`.`
-  const failureHeader = `> **Failed prerelease attempt: ${activeVersion} — identity permanently closed.**\n>\n> ${surfaceSummary}`
   if (npmState === 'published-exact') {
-    replace(
-      sources,
-      'README.md',
-      `ZigCSS \`${activeVersion}\` is the published prerelease on npm \`next\`.`,
-      `Release attempt for \`v${activeVersion}\` failed after public surfaces were created. npm \`next\` still serves \`zigcss@${activeVersion}\`.`,
-    )
-    replace(
-      sources,
-      'README.md',
-      `> **Published prerelease: ${activeVersion} — npm \`next\`.**`,
-      failureHeader,
-    )
-    replace(
-      sources,
-      'README.md',
-      '`candidateReady: false` after immutable publication',
-      '`candidateReady: false` after failed publication',
-    )
     replace(
       sources,
       'docs/src/content/docs/guide/status.md',
@@ -718,6 +614,7 @@ function setPublicationFailedPhase(
       `${activeVersion} · failed release identity · do not reuse`,
     )
     replace(sources, 'docs/src/app/components/Home.tsx', '8/8 admission gates verified', `${verifiedPreTagGates}/8 admission gates verified · publication failed`)
+    replace(sources, 'docs/src/app/components/Home.tsx', 'candidateReady=false after immutable publication', 'candidateReady=false after failed publication')
     replace(
       sources,
       'docs/src/app/components/GettingStarted.tsx',
@@ -765,19 +662,6 @@ function setPublicationFailedPhase(
   } else {
     replace(
       sources,
-      'README.md',
-      `Active source candidate \`${activeVersion}\` is unpublished.`,
-      `Release attempt for \`v${activeVersion}\` failed and its exact identity is permanently closed. Active source package ${activeVersion} remains unavailable from npm.`,
-    )
-    replace(
-      sources,
-      'README.md',
-      `> **Active source candidate: ${activeVersion} — unpublished.**`,
-      failureHeader,
-    )
-    replace(sources, 'README.md', '`candidateReady: true`', '`candidateReady: false` after failed publication')
-    replace(
-      sources,
       'docs/src/content/docs/guide/status.md',
       `Active source candidate ${activeVersion} is selected in \`release/next-release.json\` but is not published.`,
       `ZigCSS ${activeVersion} release attempt failed and the exact identity is permanently closed.\n\n${surfaceSummary}`,
@@ -806,6 +690,7 @@ function setPublicationFailedPhase(
       '7/8 admission gates verified',
       `${verifiedPreTagGates}/8 admission gates verified · publication failed`,
     )
+    replace(sources, 'docs/src/app/components/Home.tsx', 'candidateReady=true after seven pre-tag gates passed', 'candidateReady=false after failed publication')
     replace(
       sources,
       'docs/src/app/components/GettingStarted.tsx',
@@ -887,12 +772,15 @@ test('release version policy accepts state-aware candidate-ready and closed publ
   }
 
   const ready = cloneSources()
+  const immutableReadme = ready.get('README.md')
   setCandidateReadyPhase(ready)
   assert.deepEqual(validateReleaseSources(ready), expected)
+  assert.equal(ready.get('README.md'), immutableReadme)
 
   const closed = cloneSources()
   setClosedPhase(closed)
   assert.deepEqual(validateReleaseSources(closed), expected)
+  assert.equal(closed.get('README.md'), immutableReadme)
 })
 
 test('release version policy accepts truthful publication-failed copy for every reachable surface state', () => {
@@ -910,8 +798,67 @@ test('release version policy accepts truthful publication-failed copy for every 
     { githubState: 'immutable-published', npmState: 'published-exact' },
   ]) {
     const failed = cloneSources()
+    const immutableReadme = failed.get('README.md')
     setPublicationFailedPhase(failed, surfaces)
     assert.deepEqual(validateReleaseSources(failed), expected, JSON.stringify(surfaces))
+    assert.equal(failed.get('README.md'), immutableReadme, 'failed publication cannot rewrite packed README bytes')
+  }
+})
+
+test('immutable README rejects publication-state copy in every phase while retaining benchmark and editor boundaries', () => {
+  const phases = [
+    ['planned', () => {}],
+    ['candidate-ready', setCandidateReadyPhase],
+    ['closed', setClosedPhase],
+    ['publication-failed-absent', sources => setPublicationFailedPhase(sources)],
+    ['publication-failed-published', sources => setPublicationFailedPhase(sources, { githubState: 'immutable-published', npmState: 'published-exact' })],
+  ]
+  const immutableReadme = cloneSources().get('README.md')
+  for (const [phase, setPhase] of phases) {
+    const sources = cloneSources()
+    setPhase(sources)
+    assert.equal(sources.get('README.md'), immutableReadme, phase)
+    assert.match(immutableReadme, /Timing, ranking, throughput, memory, and ratio numbers remain unpublished until that evidence lands\./)
+    assert.match(immutableReadme, /publication remains unauthorized, so build and install the verified pre-release VSIX locally/)
+    assert.equal(validateReleaseSources(sources).surfaces, synchronizedSurfaceCount)
+    for (const claim of [
+      `Active source candidate ${activeVersion} is unpublished.`,
+      `ZigCSS ${activeVersion} is not published.`,
+      `ZigCSS \`${activeVersion}\` is the published prerelease on npm \`next\`.`,
+      `The published \`${activeVersion}\` prerelease package exports the API.`,
+      `zigcss@${activeVersion} is available.`,
+      `Release workflow succeeded for ${activeVersion}.`,
+      `Release workflow failed for ${activeVersion}.`,
+      '`candidateReady: true`',
+      '`candidateReady: false` after immutable publication',
+      'This remains an Unreleased package capability.',
+      'This package capability is unpublished.',
+      'A future publication must ship the current native protocol.',
+      'npm next remains bound to 0.6.0-rc.2.',
+      `npm \`next\` serves \`zigcss@${activeVersion}\`.`,
+      'Historical npm version `0.6.0-rc.2` remains on `next`.',
+    ]) {
+      const stale = new Map(sources)
+      injectCopyProbe(stale, 'README.md', claim)
+      assert.throws(() => validateReleaseSources(stale), /README state-neutral publication boundary/, `${phase}: ${claim}`)
+    }
+  }
+})
+
+test('immutable README binds the exact package identity, live evidence links, and conditional install instruction', () => {
+  for (const [current, drift] of [
+    [`> **Prerelease package identity: ${activeVersion}.**`, '> **Prerelease package identity: 9.9.9.**'],
+    [`https://github.com/vyakymenko/zigcss/releases/tag/v${activeVersion}`, 'https://github.com/vyakymenko/zigcss/releases/latest'],
+    [`https://www.npmjs.com/package/zigcss/v/${activeVersion}`, 'https://www.npmjs.com/package/zigcss'],
+    ['https://github.com/vyakymenko/zigcss/blob/main/release/next-release.json', 'https://github.com/vyakymenko/zigcss/blob/v0.6.0/release/next-release.json'],
+    ['https://vyakymenko.github.io/zigcss/docs/guide/status/', 'https://vyakymenko.github.io/zigcss/'],
+    ['After confirming that the exact prerelease version is published in the [live release status]', 'Install this available prerelease now; see the [live release status]'],
+    [`npm install --save-dev zigcss@${activeVersion}`, 'npm install --save-dev zigcss@next'],
+    [`npm install --save-dev zigcss@${publishedStableVersion}`, 'npm install --save-dev zigcss@latest'],
+  ]) {
+    const stale = cloneSources()
+    replaceEvery(stale, 'README.md', current, drift)
+    assert.throws(() => validateReleaseSources(stale), /README state-neutral package contract/, current)
   }
 })
 
@@ -924,11 +871,11 @@ test('publication-failed public copy rejects success claims and requires a new c
     setPublicationFailedPhase(staleHeader, surfaces)
     replace(
       staleHeader,
-      'README.md',
-      `> **Failed prerelease attempt: ${activeVersion} — identity permanently closed.**`,
-      `> **Published prerelease: ${activeVersion} — npm \`next\`.**`,
+      'docs/src/content/docs/guide/status.md',
+      `ZigCSS ${activeVersion} release attempt failed and the exact identity is permanently closed.`,
+      `ZigCSS ${activeVersion} is the published prerelease on npm \`next\`.`,
     )
-    assert.throws(() => validateReleaseSources(staleHeader), /README failed publication identity/)
+    assert.throws(() => validateReleaseSources(staleHeader), /status failed publication identity/)
 
     const staleSurfaces = cloneSources()
     setPublicationFailedPhase(staleSurfaces, surfaces)
@@ -953,13 +900,13 @@ test('publication-failed public copy rejects success claims and requires a new c
 
   const falseNpmSuccess = cloneSources()
   setPublicationFailedPhase(falseNpmSuccess, { githubState: 'absent', npmState: 'absent' })
-  replace(
+  replaceEvery(
     falseNpmSuccess,
-    'README.md',
-    `Active source package ${activeVersion} remains unavailable from npm.`,
-    `npm \`next\` serves \`zigcss@${activeVersion}\`.`,
+    'docs/src/data/capabilities.json',
+    'The npm package surface is absent; source-checkout use remains available.',
+    'The exact npm prerelease is published despite the failed workflow terminal.',
   )
-  assert.throws(() => validateReleaseSources(falseNpmSuccess), /README absent npm failure boundary/)
+  assert.throws(() => validateReleaseSources(falseNpmSuccess), /capability absent npm failure boundary/)
 
   const falseWorkflowSuccess = cloneSources()
   setPublicationFailedPhase(falseWorkflowSuccess, {
@@ -969,12 +916,12 @@ test('publication-failed public copy rejects success claims and requires a new c
   })
   injectCopyProbe(
     falseWorkflowSuccess,
-    'README.md',
+    'docs/src/content/docs/guide/status.md',
     `Release workflow succeeded for ${activeVersion}.`,
   )
   assert.throws(
     () => validateReleaseSources(falseWorkflowSuccess),
-    /README\.md failed publication success contradiction/,
+    /status\.md failed publication success contradiction/,
   )
 
   const falseUnpublished = cloneSources()
@@ -982,13 +929,13 @@ test('publication-failed public copy rejects success claims and requires a new c
     githubState: 'immutable-published',
     npmState: 'published-exact',
   })
-  replace(
+  replaceEvery(
     falseUnpublished,
-    'README.md',
-    `npm \`next\` still serves \`zigcss@${activeVersion}\``,
-    `zigcss@${activeVersion} is unpublished`,
+    'docs/src/data/capabilities.json',
+    'The exact npm prerelease is published despite the failed workflow terminal.',
+    'The npm package surface is absent; source-checkout use remains available.',
   )
-  assert.throws(() => validateReleaseSources(falseUnpublished), /README published npm failure boundary/)
+  assert.throws(() => validateReleaseSources(falseUnpublished), /capability published npm failure boundary/)
 })
 
 test('release version policy rejects phase/count/schema and public-copy drift', () => {
@@ -1010,7 +957,7 @@ test('release version policy rejects phase/count/schema and public-copy drift', 
       if (gate.evidence.length === 0) gate.evidence = [`verified evidence for ${gate.id}`]
     }
   })
-  assert.throws(() => validateReleaseSources(readyWithoutCopy), /README admitted candidate interlock/)
+  assert.throws(() => validateReleaseSources(readyWithoutCopy), /status guide admitted candidate interlock/)
 
   const wrongClosedSchema = cloneSources()
   setClosedPhase(wrongClosedSchema)
@@ -1114,7 +1061,7 @@ test('closed release rejects stale candidate, Unreleased, and historical next co
   }
 
   for (const [filename, label] of [
-    ['README.md', 'README closed release phase outside benchmark boundary'],
+    ['README.md', 'README state-neutral publication boundary'],
     ['docs/src/app/components/Home.tsx', 'homepage closed release phase outside benchmark boundary'],
   ]) {
     const stale = cloneSources()

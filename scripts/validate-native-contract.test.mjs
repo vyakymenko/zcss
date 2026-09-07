@@ -15,6 +15,7 @@ import {
 } from './validate-native-contract.mjs'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const sourcePackageVersion = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8')).version
 const candidateCommit = 'a'.repeat(40)
 const differentMainCommit = 'b'.repeat(40)
 
@@ -1002,13 +1003,19 @@ test('accepts the published native stylesheet implementation contract', () => {
 
 test('separates active package identity from immutable stable publication evidence', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(repositoryRoot, 'package.json'), 'utf8'))
+  const readme = fs.readFileSync(path.join(repositoryRoot, 'README.md'), 'utf8')
+  const readmeForVersion = version => readme.replaceAll(sourcePackageVersion, version)
   manifest.version = '0.7.0'
-  assert.doesNotThrow(() => validateContract(loadContract(), { manifest }))
+  assert.throws(
+    () => validateContract(loadContract(), { manifest }),
+    /README programmatic Node API module boundary is missing/,
+  )
+  assert.doesNotThrow(() => validateContract(loadContract(), { manifest, readme: readmeForVersion(manifest.version) }))
 
   const rollbackManifest = clone(manifest)
   rollbackManifest.version = '0.5.9'
   assert.throws(
-    () => validateContract(loadContract(), { manifest: rollbackManifest }),
+    () => validateContract(loadContract(), { manifest: rollbackManifest, readme: readmeForVersion(rollbackManifest.version) }),
     /active package version 0\.5\.9 is older than immutable stable publication 0\.6\.0/,
   )
 
@@ -1621,7 +1628,7 @@ test('binds the finite NATIVE-008 capability graduation terminal', () => {
     [
       'readme',
       'README.md',
-      'The current `Unreleased` source package also exports a typed programmatic Node.js API',
+      `The \`${sourcePackageVersion}\` prerelease package exports a typed programmatic Node.js API`,
       'The current source package has no programmatic API',
       /README programmatic Node API module boundary is missing/,
     ],
@@ -1838,8 +1845,8 @@ test('binds the README to the exact self-contained native source snapshot', () =
   const readme = fs.readFileSync(path.join(repositoryRoot, 'README.md'), 'utf8')
   for (const [needle, replacement, expectedError] of [
     [
-      'The current source snapshot compiles CSS, SCSS, indented Sass, Less, and Stylus through self-contained native Zig paths.',
-      'The current source snapshot compiles CSS through a native Zig path.',
+      'It compiles CSS, SCSS, indented Sass, Less, and Stylus through self-contained native Zig paths.',
+      'It compiles CSS through a native Zig path.',
       /README native five-language source snapshot is missing/,
     ],
     [
@@ -1893,13 +1900,38 @@ test('binds the README to the exact self-contained native source snapshot', () =
       /README native plugin boundary is missing/,
     ],
     [
+      `The \`${sourcePackageVersion}\` prerelease package exports a typed programmatic Node.js API from its package root for both CommonJS and real ESM consumers.`,
+      'The `0.6.0` package exports a typed programmatic Node.js API from its package root for both CommonJS and real ESM consumers.',
+      /README programmatic Node API module boundary is missing/,
+    ],
+    [
+      `The \`${sourcePackageVersion}\` prerelease package adds explicit, typed adapter subpaths on top of the programmatic compiler.`,
+      'The `0.6.0` package adds explicit, typed adapter subpaths on top of the programmatic compiler.',
+      /README explicit build-tool adapter boundary is missing/,
+    ],
+    [
       '`nativeReleaseReady: true`',
       '`nativeReleaseReady: false`',
       /README release-ready native interlock is missing/,
     ],
     [
-      'GitHub prerelease and npm `next` publication are verified',
+      'Its historical GitHub prerelease and npm publication are verified',
       'immutable publication remains pending',
+      /README published native release terminal is missing/,
+    ],
+    [
+      'GitHub prerelease 369856953 has a recorded `immutable: false` readback',
+      'GitHub prerelease 369856954 has a recorded `immutable: false` readback',
+      /README published native release terminal is missing/,
+    ],
+    [
+      'GitHub prerelease 369856953 has a recorded `immutable: false` readback',
+      'GitHub prerelease 369856953 has a recorded `immutable: true` readback',
+      /README published native release terminal is missing/,
+    ],
+    [
+      'while npm version `0.6.0-rc.2` is immutable.',
+      'while npm version `0.6.0-rc.3` is immutable.',
       /README published native release terminal is missing/,
     ],
   ]) {

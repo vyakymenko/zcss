@@ -6,6 +6,85 @@ import path from 'node:path'
 
 const workflowsDir = path.resolve(import.meta.dirname, '..', '..', '.github', 'workflows')
 const statusGuide = fs.readFileSync(path.resolve(import.meta.dirname, 'content', 'docs', 'guide', 'status.md'), 'utf8')
+const nextRelease = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, '..', '..', 'release', 'next-release.json'), 'utf8'))
+
+type ReleaseStatusContract = {
+  state: string
+  candidateVersion: string
+  candidateReady: boolean
+  gates: { state: string }[]
+}
+
+function expectReleaseStatusCopy(contract: ReleaseStatusContract, guide: string) {
+  const openIdentity = `Active source candidate ${contract.candidateVersion} is selected in \`release/next-release.json\` but is not published.`
+  const phases = {
+    planned: {
+      identity: openIdentity,
+      interlock: 'Its `candidateReady` interlock remains `false` until all seven pre-tag gates pass',
+      ready: false,
+      verified: 5,
+    },
+    'candidate-ready': {
+      identity: openIdentity,
+      interlock: 'Its `candidateReady` interlock is `true` after all seven pre-tag gates passed',
+      ready: true,
+      verified: 7,
+    },
+    closed: {
+      identity: `ZigCSS ${contract.candidateVersion} is the published prerelease on npm \`next\`.`,
+      interlock: 'Its `candidateReady` interlock is `false` after immutable publication',
+      ready: false,
+      verified: 8,
+    },
+    'publication-failed': {
+      identity: `ZigCSS ${contract.candidateVersion} release attempt failed and the exact identity is permanently closed.`,
+      interlock: 'Its `candidateReady` interlock is `false` after the failed publication attempt',
+      ready: false,
+      verified: contract.gates.filter(gate => gate.state === 'verified').length,
+    },
+  }
+  expect(Object.keys(phases)).toContain(contract.state)
+  const phase = phases[contract.state as keyof typeof phases]
+  expect(contract.candidateReady).toBe(phase.ready)
+  expect(contract.gates).toHaveLength(8)
+  if (contract.state === 'publication-failed') expect([5, 6, 7]).toContain(phase.verified)
+  expect(contract.gates.map(gate => gate.state)).toEqual(Array.from({ length: 8 }, (_, index) => (
+    index < phase.verified ? 'verified' : index === 7 && contract.state === 'publication-failed' ? 'failed' : 'pending'
+  )))
+  const progress = contract.state === 'publication-failed'
+    ? `${phase.verified} of 8 admission gates are verified; the publication terminal is failed and carries recorded failure evidence`
+    : `${phase.verified} of 8 admission gates now carry recorded evidence`
+  expect(guide).toContain(phase.identity)
+  expect(guide).toContain(phase.interlock)
+  expect(guide).toContain(progress)
+  for (const other of Object.values(phases)) {
+    if (other.interlock !== phase.interlock) expect(guide).not.toContain(other.interlock)
+    if (other.identity !== phase.identity) expect(guide).not.toContain(other.identity)
+  }
+}
+
+test('status readiness assertions accept only the exact planned, admitted, or terminal phase', () => {
+  for (const [state, ready, verified, identity, interlock] of [
+    ['planned', false, 5, 'Active source candidate 0.7.0-rc.1 is selected in `release/next-release.json` but is not published.', 'Its `candidateReady` interlock remains `false` until all seven pre-tag gates pass'],
+    ['candidate-ready', true, 7, 'Active source candidate 0.7.0-rc.1 is selected in `release/next-release.json` but is not published.', 'Its `candidateReady` interlock is `true` after all seven pre-tag gates passed'],
+    ['closed', false, 8, 'ZigCSS 0.7.0-rc.1 is the published prerelease on npm `next`.', 'Its `candidateReady` interlock is `false` after immutable publication'],
+    ...[5, 6, 7].map(verified => ['publication-failed', false, verified, 'ZigCSS 0.7.0-rc.1 release attempt failed and the exact identity is permanently closed.', 'Its `candidateReady` interlock is `false` after the failed publication attempt'] as const),
+  ] as const) {
+    const contract = {
+      state,
+      candidateVersion: '0.7.0-rc.1',
+      candidateReady: ready,
+      gates: Array.from({ length: 8 }, (_, index) => ({ state: index < verified ? 'verified' : index === 7 && state === 'publication-failed' ? 'failed' : 'pending' })),
+    }
+    const progress = state === 'publication-failed'
+      ? `${verified} of 8 admission gates are verified; the publication terminal is failed and carries recorded failure evidence`
+      : `${verified} of 8 admission gates now carry recorded evidence`
+    const guide = `${identity}\n${interlock}\n${progress}`
+    expect(() => expectReleaseStatusCopy(contract, guide)).not.toThrow()
+    expect(() => expectReleaseStatusCopy({ ...contract, candidateReady: !ready }, guide)).toThrow()
+    expect(() => expectReleaseStatusCopy(contract, guide.replace(progress, '0 of 8 admission gates now carry recorded evidence'))).toThrow()
+  }
+})
 
 describe('documentation workflow', () => {
   const workflow = fs.readFileSync(path.join(workflowsDir, 'docs.yml'), 'utf8')
@@ -409,13 +488,7 @@ describe('native artifact workflows', () => {
     expect(releaseWorkflow).toContain('--release-tag "$GITHUB_REF_NAME"')
     expect(releaseWorkflow).toContain('--candidate-commit "$candidate_commit"')
     expect(releaseWorkflow).toContain('--origin-main-commit "$origin_main_commit"')
-    expect(statusGuide).toContain(
-      'Active source candidate 0.7.0-rc.1 is selected in `release/next-release.json` but is not published.',
-    )
-    expect(statusGuide).toContain(
-      'Its `candidateReady` interlock remains `false` until all seven pre-tag gates pass',
-    )
-    expect(statusGuide).toContain('5 of 8 admission gates now carry recorded evidence')
+    expectReleaseStatusCopy(nextRelease, statusGuide)
     expect(npmAuthority).toBeGreaterThan(tagInterlock)
     expect(npmPublish).toBeGreaterThan(npmAuthority)
   })

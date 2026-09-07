@@ -1777,6 +1777,7 @@ function validateWebsiteGraduation(websiteSources, formatExamples, siteExamplesT
 
 function validateCapabilityGraduation(
   graduation,
+  activePackageVersion,
   productionSources,
   cliTests,
   readme,
@@ -1841,7 +1842,7 @@ function validateCapabilityGraduation(
 
   for (const [needle, label] of [
     [
-      'The current source snapshot compiles CSS, SCSS, indented Sass, Less, and Stylus through self-contained native Zig paths.',
+      'It compiles CSS, SCSS, indented Sass, Less, and Stylus through self-contained native Zig paths.',
       'README native five-language source snapshot',
     ],
     [
@@ -1901,7 +1902,7 @@ function validateCapabilityGraduation(
       'README confined source-checkout JavaScript wrapper boundary',
     ],
     [
-      'The current `Unreleased` source package also exports a typed programmatic Node.js API from its package root for both CommonJS and real ESM consumers.',
+      `The \`${activePackageVersion}\` prerelease package exports a typed programmatic Node.js API from its package root for both CommonJS and real ESM consumers.`,
       'README programmatic Node API module boundary',
     ],
     [
@@ -1913,7 +1914,7 @@ function validateCapabilityGraduation(
       'README programmatic Node API negative boundary',
     ],
     [
-      'The current `Unreleased` source package adds explicit, typed adapter subpaths on top of the programmatic compiler.',
+      `The \`${activePackageVersion}\` prerelease package adds explicit, typed adapter subpaths on top of the programmatic compiler.`,
       'README explicit build-tool adapter boundary',
     ],
     [
@@ -1942,7 +1943,7 @@ function validateCapabilityGraduation(
     ],
     ['`nativeReleaseReady: true`', 'README release-ready native interlock'],
     [
-      'GitHub prerelease and npm `next` publication are verified',
+      'Its historical GitHub prerelease and npm publication are verified; GitHub prerelease 369856953 has a recorded `immutable: false` readback, while npm version `0.6.0-rc.2` is immutable.',
       'README published native release terminal',
     ],
   ]) {
@@ -3952,6 +3953,7 @@ export function validateContract(
   )
   validateCapabilityGraduation(
     contract.capabilityGraduation,
+    manifest.version,
     productionSources,
     cliTests,
     readme,

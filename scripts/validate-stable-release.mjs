@@ -331,8 +331,12 @@ function validateSources(contract, gates, sources) {
     if (unsupportedClaim.test(source)) fail(`${label} contains an unverified comparative claim`)
   }
   if (contract.state === 'closed') {
-    requireText(sources.get('README.md'), 'npm `latest` serves `zigcss@0.6.0`', 'README stable publication')
-    requireText(sources.get('README.md'), 'npm install --save-dev zigcss', 'README stable install')
+    const readme = sources.get('README.md')
+    requireText(readme, '> **Stable package identity: 0.6.0 — published.**', 'README stable package identity')
+    requireText(readme, '`zigcss@0.6.0` is an immutable npm version', 'README immutable stable npm version')
+    requireText(readme, 'GitHub prerelease 369856953 has a recorded `immutable: false` readback, while npm version `0.6.0-rc.2` is immutable.', 'README historical prerelease immutability')
+    requireText(readme, 'GitHub Release 372291445 also has a recorded `immutable: false` readback, while npm version `0.6.0` is immutable.', 'README historical stable immutability')
+    requireText(readme, '\nnpm install --save-dev zigcss@0.6.0\n', 'README exact stable install')
     requireText(sources.get('docs/index.html'), 'ZIGCSS 0.6.0 · STABLE RELEASE', 'site stable publication')
     requireText(sources.get('docs/src/app/components/GettingStarted.tsx'), 'ZigCSS 0.6.0 is published on npm latest', 'getting-started stable publication')
     requireText(sources.get('docs/src/app/components/Home.tsx'), '0.6.0 · STABLE RELEASE · ZERO RUNTIME DEPENDENCIES', 'home stable publication')

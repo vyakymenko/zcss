@@ -46,6 +46,31 @@ test('accepts the closed finite stable publication contract', () => {
   )
 })
 
+test('binds the state-neutral README to exact immutable versions and historical GitHub limits', () => {
+  const contract = readStableReleaseContract()
+  const sources = readStableReleaseSources()
+  assert.doesNotMatch(sources.get('README.md'), /npm `latest` serves `zigcss@0\.6\.0`/)
+  assert.doesNotThrow(() => validateStableReleaseContract(contract, sources))
+
+  for (const [current, replacement, error] of [
+    ['> **Stable package identity: 0.6.0 — published.**', '> **Stable package identity: 0.6.1 — published.**', /README stable package identity/],
+    ['`zigcss@0.6.0` is an immutable npm version', '`zigcss@0.6.1` is an immutable npm version', /README immutable stable npm version/],
+    ['`zigcss@0.6.0` is an immutable npm version', 'npm `latest` serves `zigcss@0.6.0`', /README immutable stable npm version/],
+    ['GitHub prerelease 369856953 has a recorded `immutable: false` readback', 'GitHub prerelease 369856954 has a recorded `immutable: false` readback', /README historical prerelease immutability/],
+    ['GitHub prerelease 369856953 has a recorded `immutable: false` readback', 'GitHub prerelease 369856953 has a recorded `immutable: true` readback', /README historical prerelease immutability/],
+    ['GitHub Release 372291445 also has a recorded `immutable: false` readback', 'GitHub Release 372291446 also has a recorded `immutable: false` readback', /README historical stable immutability/],
+    ['GitHub Release 372291445 also has a recorded `immutable: false` readback', 'GitHub Release 372291445 also has a recorded `immutable: true` readback', /README historical stable immutability/],
+    ['npm install --save-dev zigcss@0.6.0', 'npm install --save-dev zigcss', /README exact stable install/],
+    ['npm install --save-dev zigcss@0.6.0', 'npm install --save-dev zigcss@0.6.0-rc.2', /README exact stable install/],
+  ]) {
+    const changed = new Map(sources)
+    const readme = sources.get('README.md')
+    assert.ok(readme.includes(current), `README mutation fixture missing ${current}`)
+    changed.set('README.md', readme.replace(current, replacement))
+    assert.throws(() => validateStableReleaseContract(contract, changed), error)
+  }
+})
+
 test('closed publication evidence permits a newer active source but rejects rollback', () => {
   assert.deepEqual(
     validateStableReleaseContract(readStableReleaseContract(), activeVersionSources('0.7.0')),

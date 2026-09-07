@@ -2,9 +2,9 @@
 
 ZigCSS 0.6.0 is the published stable release: all five machine rows are native-graduated, and its non-prerelease GitHub Release's 15 attested archive/checksum/SBOM subjects plus 10 Sigstore bundle files, immutable npm `latest` version with SLSA provenance, preserved `next`, and anonymous five-syntax install are verified. GitHub releases 372291445 (`0.6.0`) and 369856953 (`0.6.0-rc.2`) predate Immutable Releases and both read back `immutable: false`; their protected tags and immutable npm versions remain closed historical evidence.
 
-Active source candidate 0.7.0-rc.1 is selected in `release/next-release.json` but is not published. Its `candidateReady` interlock remains `false` until all seven pre-tag gates pass; published stable identity remains 0.6.0 throughout that work.
+Active source candidate 0.7.0-rc.1 is selected in `release/next-release.json` but is not published. Its `candidateReady` interlock is `true` after all seven pre-tag gates passed; published stable identity remains 0.6.0 throughout that work.
 
-5 of 8 admission gates now carry recorded evidence: candidate selection, active-version synchronization, native artifact reproducibility, complete local validation, and documentation/site validation. The local gate includes exact Nix 2.35.2 sandboxed `aarch64-linux` flake check, build, install checks, and run inside an ephemeral digest-pinned container. Hosted Build, exact `origin/main` integration, and tag-workflow publication remain pending.
+7 of 8 admission gates now carry recorded evidence: candidate selection, active-version synchronization, native artifact reproducibility, complete local validation, documentation/site validation, hosted Build validation, and exact `origin/main` integration. The local gate includes exact Nix 2.35.2 sandboxed `aarch64-linux` flake check, build, install checks, and run inside an ephemeral digest-pinned container. Tag-workflow publication remains pending; no `0.7.0-rc.1` publication is claimed.
 
 The active source version may advance without rewriting that closed publication record or the verified Homebrew formula; active package/CLI synchronization and published-stable evidence are validated as separate fail-closed identities.
 

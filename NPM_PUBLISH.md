@@ -22,7 +22,7 @@ Every future tag-triggered publication must first prove, through the bounded Git
 
 ## Next candidate admission
 
-`release/next-release.json` selects exact candidate `0.7.0-rc.1`, tag `v0.7.0-rc.1`, npm channel `next`, and GitHub prerelease delivery under a separate fail-closed contract. It is currently `planned` with `candidateReady: false`; this selection does not authorize creating the tag or publishing either release surface.
+`release/next-release.json` selects exact candidate `0.7.0-rc.1`, tag `v0.7.0-rc.1`, npm channel `next`, and GitHub prerelease delivery under a separate fail-closed contract. It is currently `candidate-ready` with `candidateReady: true`; this selection does not authorize creating the tag or publishing either release surface.
 
 The release workflow first revalidates the closed 0.6.0 evidence, then routes every attempted tag through the candidate admission gate. Historical tags at or below 0.6.0 are protected, permanently closed identities and cannot be admitted again. A tag newer than 0.6.0 is rejected unless it is exactly `v0.7.0-rc.1`. Even that exact tag remains rejected until all seven ordered pre-tag gates carry evidence, the active package and native-integrity identities agree on `0.7.0-rc.1`, and the contract is explicitly changed to `candidate-ready` with `candidateReady: true`. Candidate-ready hosted and origin evidence records run IDs, timestamps, and policy results but deliberately stores no candidate commit hash, so the contract can itself be committed. At tag admission, runtime arguments bind the peeled tag commit to a fresh exact `origin/main` readback, and the workflow API gates bind same-commit Build and CodeQL results to that exact runtime commit.
 

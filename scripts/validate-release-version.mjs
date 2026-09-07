@@ -195,7 +195,6 @@ const nextReleaseGateIds = Object.freeze([
   'tag-workflow-publication',
 ])
 const closedPublicReleasePaths = Object.freeze([
-  'README.md',
   'NPM_PUBLISH.md',
   'docs/src/data/capabilities.json',
   'docs/src/content/docs/guide/status.md',
@@ -215,7 +214,6 @@ const closedPublicReleasePaths = Object.freeze([
   'examples/parcel/README.md',
 ])
 const closedNoUnreleasedPaths = Object.freeze([
-  'README.md',
   'docs/src/data/capabilities.json',
   'docs/src/content/docs/guide/status.md',
   'docs/src/content/docs/guide/builder-integrations.md',
@@ -606,9 +604,46 @@ export function validateReleaseSources(sources) {
     `> **Stable package identity: ${publishedStableVersion} — published.**`,
     'README published stable identity header',
   )
+  // npm preserves these README bytes. Admission, publication, and failure
+  // transitions belong to live surfaces, not to an immutable package's copy.
+  for (const fragment of [
+    `This README describes the \`${version}\` prerelease package contract.`,
+    `> **Prerelease package identity: ${version}.**`,
+    `The \`${version}\` prerelease package contract adds`,
+    `The \`${version}\` prerelease package exports`,
+    `The \`${version}\` prerelease package adds explicit, typed adapter subpaths`,
+    'This README records a versioned contract, not a live publication status.',
+    `https://github.com/vyakymenko/zigcss/releases/tag/v${version}`,
+    `https://www.npmjs.com/package/zigcss/v/${version}`,
+    'https://github.com/vyakymenko/zigcss/blob/main/release/next-release.json',
+    'https://vyakymenko.github.io/zigcss/docs/guide/status/',
+    'After confirming that the exact prerelease version is published in the [live release status](https://vyakymenko.github.io/zigcss/docs/guide/status/), select its version explicitly for the API and adapters described below:'
+      + `\n\n\`\`\`bash\nnpm install --save-dev zigcss@${version}\n\`\`\``,
+    `npm install --save-dev zigcss@${publishedStableVersion}`,
+    'A prerelease does not promote the stable channel',
+  ]) {
+    expectContains(readme, fragment, 'README state-neutral package contract')
+  }
+  const readmeBenchmarkBoundary = 'Timing, ranking, throughput, memory, and ratio numbers remain unpublished until that evidence lands.'
+  expectLiteralCount(readme, readmeBenchmarkBoundary, 1, 'README unpublished benchmark boundary')
+  expectNotMatch(
+    readme.replace(readmeBenchmarkBoundary, ''),
+    /\b(?:unpublished|unreleased|candidateReady)\b|\bnot published\b|(?:Active source candidate|Published prerelease|Failed prerelease attempt):|\bfuture[- ](?:package|release|publication)\b|\b(?:still is not registry delivery|remains unavailable from npm)\b|\bnpm\s+`?next`?\s+(?:serves|still serves|remains bound)\b|\bremains on\s+`?next\b/i,
+    'README state-neutral publication boundary',
+  )
+  const escapedReadmeVersion = escapeRegExp(version)
+  expectNotMatch(
+    readme,
+    new RegExp(
+      `\\b(?:zigcss\\s+|zigcss@|(?:version|candidate|prerelease)\\s+)[\x60*]*${escapedReadmeVersion}[\x60*]*\\s+(?:(?:is|remains|has been|was)\\s+)?(?:the\\s+)?(?:published|available|unavailable|planned|candidate-ready|closed|pending|blocked)\\b|`
+        + `\\b(?:published|planned|candidate-ready|closed|pending)\\s+[\x60*]*${escapedReadmeVersion}[\x60*]*\\s+(?:prerelease|candidate|package)\\b|`
+        + `(?:release|publication)[^\\n]{0,120}(?:succeeded|successful|failed)[^\\n]{0,120}${escapedReadmeVersion}|`
+        + `${escapedReadmeVersion}[^\\n]{0,120}(?:release|publication)[^\\n]{0,120}(?:succeeded|successful|failed)`,
+      'i',
+    ),
+    'README state-neutral publication boundary',
+  )
   if (nextReleasePhase.state === 'planned') {
-    expectContains(readme, `> **Active source candidate: ${version} — unpublished.**`, 'README planned candidate identity')
-    expectContains(readme, '`candidateReady: false`', 'README planned candidate interlock')
     expectContains(status, `Active source candidate ${version} is selected`, 'status guide planned candidate identity')
     expectContains(status, '`candidateReady` interlock remains `false` until all seven pre-tag gates pass', 'status guide planned candidate interlock')
     expectContains(home, `${version} · unpublished source proofs`, 'homepage planned candidate identity')
@@ -621,8 +656,6 @@ export function validateReleaseSources(sources) {
       'npm guide planned candidate state',
     )
   } else if (nextReleasePhase.state === 'candidate-ready') {
-    expectContains(readme, `> **Active source candidate: ${version} — unpublished.**`, 'README admitted candidate identity')
-    expectContains(readme, '`candidateReady: true`', 'README admitted candidate interlock')
     expectContains(status, `Active source candidate ${version} is selected`, 'status guide admitted candidate identity')
     expectContains(
       status,
@@ -639,13 +672,6 @@ export function validateReleaseSources(sources) {
       'npm guide admitted candidate state',
     )
   } else if (nextReleasePhase.state === 'closed') {
-    expectContains(readme, `> **Published prerelease: ${version} — npm \`next\`.**`, 'README published prerelease identity')
-    expectContains(readme, '`candidateReady: false` after immutable publication', 'README closed candidate interlock')
-    expectContains(readme, `ZigCSS \`${version}\` is the published prerelease on npm \`next\``, 'README published prerelease introduction')
-    expectContains(readme, `npm \`next\` serves \`zigcss@${version}\``, 'README current prerelease channel')
-    expectContains(readme, `The published \`${version}\` prerelease package contract adds`, 'README published package integrity boundary')
-    expectContains(readme, `The published \`${version}\` prerelease package exports`, 'README published Node API boundary')
-    expectContains(readme, `The published \`${version}\` prerelease package adds explicit, typed adapter subpaths`, 'README published adapter boundary')
     expectContains(status, `ZigCSS ${version} is the published prerelease on npm \`next\``, 'status guide published prerelease identity')
     expectContains(
       status,
@@ -670,7 +696,6 @@ export function validateReleaseSources(sources) {
     expectContains(npmPublishGuide, `npm \`next\` serves \`zigcss@${version}\``, 'npm guide current prerelease channel')
     expectContains(npmPublishGuide, 'The 48-file npm package contains', 'npm guide exact package inventory')
     expectContains(npmPublishGuide, 'Install the published prerelease with `zigcss@next`', 'npm guide current prerelease install')
-    expectNotContains(readme, `> **Active source candidate: ${version} — unpublished.**`, 'README stale unpublished candidate')
     expectNotContains(status, `Active source candidate ${version} is selected`, 'status stale unpublished candidate')
     expectNotContains(home, `${version} · unpublished source proofs`, 'homepage stale unpublished candidate')
     expectNotContains(builderGuide, `The current unpublished ${version} source checkout has`, 'builder guide stale unpublished candidate')
@@ -764,13 +789,6 @@ export function validateReleaseSources(sources) {
     for (const filename of closedNoUnpublishedPaths) {
       expectNotMatch(sources.get(filename), /\bunpublished\b/i, `${filename} closed release phase`)
     }
-    const readmeBenchmarkBoundary = 'Timing, ranking, throughput, memory, and ratio numbers remain unpublished until that evidence lands.'
-    expectContains(readme, readmeBenchmarkBoundary, 'README unpublished benchmark boundary')
-    expectNotMatch(
-      readme.replace(readmeBenchmarkBoundary, ''),
-      /\bunpublished\b/i,
-      'README closed release phase outside benchmark boundary',
-    )
     const homeBenchmarkBoundary = 'Comparative rankings remain unpublished until the attested scheduled archive lands.'
     expectContains(home, homeBenchmarkBoundary, 'homepage unpublished benchmark boundary')
     expectNotMatch(
@@ -781,11 +799,7 @@ export function validateReleaseSources(sources) {
   } else {
     const githubState = nextReleasePhase.githubState
     const npmState = nextReleasePhase.npmState
-    const failureHeader = `> **Failed prerelease attempt: ${version} — identity permanently closed.**`
     const surfaceSummary = `GitHub surface: \`${githubState}\`; npm surface: \`${npmState}\`.`
-    expectContains(readme, failureHeader, 'README failed publication identity')
-    expectContains(readme, surfaceSummary, 'README failed publication surfaces')
-    expectContains(readme, '`candidateReady: false` after failed publication', 'README failed publication interlock')
     expectContains(
       status,
       `ZigCSS ${version} release attempt failed and the exact identity is permanently closed.`,
@@ -820,7 +834,6 @@ export function validateReleaseSources(sources) {
       `Select a new candidate version; never move, recreate, or reuse \`${nextRelease.candidateTag}\`.`,
       'npm guide failed publication operator transition',
     )
-    expectNotContains(readme, '`candidateReady: true`', 'README failed publication success claim')
     expectNotContains(status, '`candidateReady` interlock is `true`', 'status failed publication success claim')
     expectNotContains(home, '8/8 admission gates verified', 'homepage failed publication success claim')
     expectNotContains(
@@ -853,11 +866,8 @@ export function validateReleaseSources(sources) {
       expectNotMatch(source, contradictorySuccessClaim, `${filename} failed publication success contradiction`)
     }
     if (npmState === 'absent') {
-      expectContains(readme, `Active source package ${version} remains unavailable from npm`, 'README absent npm failure boundary')
-      expectNotContains(readme, `> **Published prerelease: ${version}`, 'README absent npm success claim')
       expectContains(zigPackageBehavior, 'The npm package surface is absent; source-checkout use remains available.', 'capability absent npm failure boundary')
     } else {
-      expectContains(readme, `npm \`next\` still serves \`zigcss@${version}\``, 'README published npm failure boundary')
       expectContains(zigPackageBehavior, 'The exact npm prerelease is published despite the failed workflow terminal.', 'capability published npm failure boundary')
     }
   }
