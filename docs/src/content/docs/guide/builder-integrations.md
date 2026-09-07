@@ -67,6 +67,10 @@ ZIGCSS_NUXT_NATIVE_BINARY="$PWD/zig-out/bin/zigcss" npm run test:nuxt-example
 - [Astro 7.2.10](https://github.com/vyakymenko/zigcss/tree/main/examples/astro) reuses `zigcss/vite` for one external module through a cached-offline static build, with a native partial, rebased asset, and composed map.
 - [Nuxt 4.5.2](https://github.com/vyakymenko/zigcss/tree/main/examples/nuxt) proves one external module in client, Nitro, and prerender output plus a native partial and rebased asset. The native CSS map chain is claimed only in `.nuxt` intermediate output.
 
+Both Next.js gates populate a private npm cache from the exact example lockfile
+before repeating installation offline. The initial cache preparation is networked;
+the subsequent installation does not rely on the repository's or developer's cache.
+
 These are narrow host proofs, not dedicated Next.js, SvelteKit, Astro, or Nuxt
 adapters. Their JavaScript deny-network/process preloads are evidence boundaries,
 not operating-system sandboxes.

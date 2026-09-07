@@ -30,6 +30,20 @@ function clone(value) {
   return structuredClone(value)
 }
 
+function plannedContract(currentContract = readNextReleaseContract()) {
+  const contract = clone(currentContract)
+  contract.schemaVersion = 1
+  contract.state = 'planned'
+  contract.candidateReady = false
+  delete contract.publicationEvidence
+  delete contract.publicationFailureEvidence
+  for (const [index, gate] of contract.gates.entries()) {
+    gate.state = index < 5 ? 'verified' : 'pending'
+    gate.evidence = index < 5 ? [`verified fixture evidence for ${gate.id}`] : []
+  }
+  return contract
+}
+
 function originIntegrationEvidence(
   description = 'Candidate-ready policy records no commit hash; tag admission compares the peeled runtime candidate commit with a fresh origin/main readback.',
 ) {
@@ -85,7 +99,7 @@ function stableSources(version) {
 }
 
 function readyContract() {
-  const contract = readNextReleaseContract()
+  const contract = plannedContract()
   contract.state = 'candidate-ready'
   contract.candidateReady = true
   for (const gate of contract.gates.slice(0, -1)) {
@@ -272,7 +286,7 @@ function failedContract(options = {}) {
 }
 
 test('accepts the canonical evidenced candidate while keeping publication closed', () => {
-  const contract = readNextReleaseContract()
+  const contract = plannedContract()
   assert.deepEqual(contract.publicationApproval, publicationApprovalPolicy)
   const result = validateReleaseAdmission(
     contract,
@@ -291,10 +305,25 @@ test('accepts the canonical evidenced candidate while keeping publication closed
   })
 })
 
+test('planned mutation fixtures are independent of admitted and terminal contract phases', () => {
+  const expected = plannedContract()
+  for (const current of [readyContract(), closedContract(), failedContract()]) {
+    const snapshot = clone(current)
+    const normalized = plannedContract(current)
+    assert.deepEqual(normalized, expected)
+    assert.deepEqual(current, snapshot, 'fixture normalization must not mutate its source contract')
+    assert.equal(validateNextReleaseContract(
+      normalized,
+      candidateSources(candidateVersion),
+      readStableReleaseContract(),
+    ).state, 'planned')
+  }
+})
+
 test('refuses the exact planned tag until every pre-tag gate is explicitly verified', () => {
   assert.throws(
     () => validateReleaseAdmission(
-      readNextReleaseContract(),
+      plannedContract(),
       candidateSources(candidateVersion),
       readStableReleaseContract(),
       stableSources(candidateVersion),
@@ -668,7 +697,7 @@ test('publication-failed evidence rejects successful conclusions, impossible sur
 test('binds schema versions to exact planned, candidate-ready, closed, and publication-failed phases', () => {
   const stable = readStableReleaseContract()
 
-  const plannedWithTerminalGate = readNextReleaseContract()
+  const plannedWithTerminalGate = plannedContract()
   plannedWithTerminalGate.gates[5].state = 'verified'
   plannedWithTerminalGate.gates[5].evidence = ['hosted evidence arrived out of phase']
   assert.throws(
@@ -843,7 +872,7 @@ test('rejects candidate identity, closed history, approval policy, and gate-poli
     },
     contract => { contract.unexpected = true },
   ]) {
-    const contract = readNextReleaseContract()
+    const contract = plannedContract()
     mutate(contract)
     assert.throws(
       () => validateNextReleaseContract(
@@ -896,7 +925,7 @@ test('requires the 0.6.0 stable contract to remain terminally closed', () => {
 
   assert.throws(
     () => validateReleaseAdmission(
-      readNextReleaseContract(),
+      plannedContract(),
       candidateSources('0.6.0'),
       historical,
       stableSources('0.6.0'),
@@ -910,7 +939,7 @@ test('rejects incomplete, divergent, or unbounded active source inputs', () => {
   incomplete.delete('native-integrity.json')
   assert.throws(
     () => validateReleaseAdmission(
-      readNextReleaseContract(),
+      plannedContract(),
       incomplete,
       readStableReleaseContract(),
       stableSources(candidateVersion),
@@ -920,7 +949,7 @@ test('rejects incomplete, divergent, or unbounded active source inputs', () => {
 
   assert.throws(
     () => validateReleaseAdmission(
-      readNextReleaseContract(),
+      plannedContract(),
       {},
       readStableReleaseContract(),
       stableSources(candidateVersion),
@@ -930,7 +959,7 @@ test('rejects incomplete, divergent, or unbounded active source inputs', () => {
 
   assert.throws(
     () => validateReleaseAdmission(
-      readNextReleaseContract(),
+      plannedContract(),
       candidateSources(candidateVersion),
       readStableReleaseContract(),
       stableSources('0.6.0'),
@@ -944,7 +973,7 @@ test('rejects incomplete, divergent, or unbounded active source inputs', () => {
   divergentPackage.set('package.json', `${JSON.stringify(manifest, null, 2)}\n`)
   assert.throws(
     () => validateReleaseAdmission(
-      readNextReleaseContract(),
+      plannedContract(),
       divergentPackage,
       readStableReleaseContract(),
       stableSources(candidateVersion),
@@ -954,7 +983,7 @@ test('rejects incomplete, divergent, or unbounded active source inputs', () => {
 
   assert.throws(
     () => validateNextReleaseContract(
-      readNextReleaseContract(),
+      plannedContract(),
       candidateSources('0.7.0-rc.2'),
       readStableReleaseContract(),
     ),
@@ -992,13 +1021,20 @@ test('publication-ready state requires synchronized candidate package and integr
   )
 })
 
-test('the CLI validates static policy and rejects the still-planned real candidate', () => {
+test('the CLI validates the real on-disk phase and enforces its exact admission state', () => {
+  const actual = validateReleaseAdmission(
+    readNextReleaseContract(),
+    readNextReleaseSources(),
+    readStableReleaseContract(),
+    readStableReleaseSources(),
+  )
+  const expectedOutput = `Release admission contract verified: ${actual.tag} is ${actual.state}, candidateReady=${actual.candidateReady}, ${actual.verifiedGates}/${actual.totalGates} gates verified.\n`
   const staticResult = spawnSync(process.execPath, [script, '--check'], {
     cwd: repositoryRoot,
     encoding: 'utf8',
   })
   assert.equal(staticResult.status, 0, staticResult.stderr)
-  assert.match(staticResult.stdout, /v0\.7\.0-rc\.1 is planned, candidateReady=false/)
+  assert.equal(staticResult.stdout, expectedOutput)
 
   const releaseResult = spawnSync(process.execPath, [
     script,
@@ -1010,9 +1046,14 @@ test('the CLI validates static policy and rejects the still-planned real candida
     cwd: repositoryRoot,
     encoding: 'utf8',
   })
-  assert.notEqual(releaseResult.status, 0)
-  assert.equal(releaseResult.stdout, '')
-  assert.match(releaseResult.stderr, /is planned and not publication-ready/)
+  if (actual.state === 'candidate-ready') {
+    assert.equal(releaseResult.status, 0, releaseResult.stderr)
+    assert.equal(releaseResult.stdout, expectedOutput)
+  } else {
+    assert.notEqual(releaseResult.status, 0)
+    assert.equal(releaseResult.stdout, '')
+    assert.match(releaseResult.stderr, new RegExp(`is ${actual.state} and not publication-ready`))
+  }
 })
 
 test('the on-disk candidate contract is bounded canonical JSON', () => {

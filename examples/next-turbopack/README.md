@@ -27,6 +27,11 @@ The verifiers install the pinned host into disposable projects, run the real
 production builds, enforce their network and process boundaries, and remove the
 projects afterward.
 
+The Turbopack verifier warms a private npm cache from the exact example lock, then repeats
+`npm ci` under its network-denying preload in strict offline mode. This preparation
+does not rely on the root package's transitive versions already being cached.
+The production builds keep the same network and process boundary throughout.
+
 ```bash
 zig build -Doptimize=ReleaseFast
 cd examples/next-turbopack

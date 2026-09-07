@@ -1030,6 +1030,20 @@ function checkNpmLifecyclePaths(t, pathVariant) {
     { encoding: 'utf8', flag: 'wx', mode: 0o600 },
   )
   stageDevelopmentPackage(repositoryRoot, packageRoot, descriptor.target, digest)
+  let preload = path.join(repositoryRoot, 'scripts', 'release-smoke-preload.cjs')
+  let crlfInstaller
+  if (pathVariant === 'CRLF installer checkout') {
+    crlfInstaller = fs.readFileSync(path.join(repositoryRoot, 'install.js'), 'utf8')
+      .replace(/\r?\n/g, '\r\n')
+    fs.writeFileSync(path.join(packageRoot, 'install.js'), crlfInstaller)
+    const checkoutRoot = path.join(temporary, 'checkout')
+    const preloadRoot = path.join(checkoutRoot, 'scripts')
+    fs.mkdirSync(preloadRoot, { recursive: true, mode: 0o700 })
+    fs.writeFileSync(path.join(checkoutRoot, 'install.js'), crlfInstaller)
+    const fixturePreload = path.join(preloadRoot, 'release-smoke-preload.cjs')
+    fs.copyFileSync(preload, fixturePreload, fs.constants.COPYFILE_EXCL)
+    preload = fixturePreload
+  }
   fs.writeFileSync(
     path.join(consumer, 'package.json'),
     '{"name":"zigcss-release-lifecycle-consumer","private":true,"version":"1.0.0"}\n',
@@ -1051,7 +1065,24 @@ function checkNpmLifecyclePaths(t, pathVariant) {
   assert.equal(packed.error, undefined)
   assert.equal(packed.status, 0, packed.stderr)
   const packageArchive = path.join(packRoot, `zigcss-${descriptor.version}.tgz`)
-  const preload = path.join(repositoryRoot, 'scripts', 'release-smoke-preload.cjs')
+  if (crlfInstaller !== undefined) {
+    const extracted = spawnSync(archiveExecutable(), ['-xOf', packageArchive, 'package/install.js'], {
+      encoding: 'utf8',
+      maxBuffer: 2 * 1024 * 1024,
+      timeout: 30_000,
+    })
+    assert.equal(extracted.error, undefined)
+    assert.equal(extracted.status, 0, extracted.stderr)
+    assert.equal(extracted.stdout, crlfInstaller, 'npm pack must preserve the CRLF source bytes')
+    const linked = spawnSync(process.execPath, [npmCli,
+      'install', packageArchive, '--ignore-scripts', '--offline', '--no-audit', '--no-fund',
+    ], { cwd: consumer, encoding: 'utf8', env: npmEnvironment, timeout: 30_000 })
+    assert.equal(linked.error, undefined)
+    assert.equal(linked.status, 0, linked.stderr)
+    const linkedInstaller = fs.readFileSync(path.join(consumer, 'node_modules', 'zigcss', 'install.js'), 'utf8')
+    assert.equal(linkedInstaller, crlfInstaller.replace(/^(#![^\n]+)\r\n/, '$1\n'))
+    assert.notEqual(linkedInstaller, crlfInstaller, 'npm bin-links changes only the CRLF hashbang')
+  }
   const shadowRoot = path.join(temporary, 'path-shadow')
   const shadowMarker = path.join(temporary, 'shadow-executed')
   fs.mkdirSync(shadowRoot, { mode: 0o700 })
@@ -1069,7 +1100,8 @@ function checkNpmLifecyclePaths(t, pathVariant) {
     )
   }
   const installed = spawnSync(process.execPath, [npmCli,
-    'install', packageArchive, '--offline', '--foreground-scripts', '--no-audit', '--no-fund',
+    ...(crlfInstaller === undefined ? ['install', packageArchive] : ['rebuild', 'zigcss']),
+    '--offline', '--foreground-scripts', '--no-audit', '--no-fund',
   ], {
     cwd: consumer,
     encoding: 'utf8',
@@ -1089,8 +1121,19 @@ function checkNpmLifecyclePaths(t, pathVariant) {
     timeout: 30_000,
   })
   assert.equal(installed.error, undefined)
-  assert.equal(installed.status, 0, installed.stderr || installed.stdout)
   assert.equal(fs.existsSync(shadowMarker), false, 'PATH-shadowed node must never execute')
+  if (crlfInstaller !== undefined) {
+    assert.notEqual(installed.status, 0)
+    assert.match(installed.stderr, /release smoke preload: lifecycle child rejected-package/)
+    assert.equal(fs.existsSync(path.join(consumer, 'node_modules', 'zigcss', 'bin')), false)
+    return
+  }
+  assert.equal(installed.status, 0, installed.stderr || installed.stdout)
+  assert.deepEqual(
+    fs.readFileSync(path.join(consumer, 'node_modules', 'zigcss', 'install.js')),
+    fs.readFileSync(path.join(repositoryRoot, 'install.js')),
+    'LF-pinned installer bytes must survive npm pack, bin-links, and lifecycle unchanged',
+  )
   const installedBinary = path.join(consumer, 'node_modules', 'zigcss', 'bin', descriptor.binaryName)
   assert.equal(
     crypto.createHash('sha256').update(fs.readFileSync(installedBinary)).digest('hex'),
@@ -1103,6 +1146,29 @@ for (const pathVariant of ['native paths', 'OS path aliases']) {
     checkNpmLifecyclePaths(t, pathVariant)
   })
 }
+
+test('npm executable sources are LF-pinned in Git and retain LF hashbang bytes', () => {
+  const attributes = spawnSync('git', ['check-attr', '-z', 'text', 'eol', '--', 'install.js', 'index.js'], {
+    cwd: repositoryRoot,
+    encoding: 'utf8',
+    timeout: 5_000,
+  })
+  assert.equal(attributes.error, undefined)
+  assert.equal(attributes.status, 0, attributes.stderr)
+  assert.deepEqual(attributes.stdout.split('\0'), [
+    'install.js', 'text', 'set', 'install.js', 'eol', 'lf',
+    'index.js', 'text', 'set', 'index.js', 'eol', 'lf', '',
+  ])
+  for (const name of ['install.js', 'index.js']) {
+    const source = fs.readFileSync(path.join(repositoryRoot, name), 'utf8')
+    assert.ok(source.startsWith('#!/usr/bin/env node\n'))
+    assert.doesNotMatch(source, /\r/)
+  }
+})
+
+test('npm CRLF hashbang rewriting reproduces the strict Windows installer rejection', t => {
+  checkNpmLifecyclePaths(t, 'CRLF installer checkout')
+})
 
 test('development reference provider host installs a process-wide deny-network policy', () => {
   const policy = path.join(repositoryRoot, 'preprocessor', 'network-policy.mjs')

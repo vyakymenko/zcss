@@ -63,8 +63,47 @@ const closedNoUnpublishedPaths = Object.freeze([
   'examples/build-systems/README.md',
 ])
 
-function cloneSources() {
-  return new Map(readReleaseSources())
+function cloneSources(currentSources = readReleaseSources()) {
+  const sources = new Map(currentSources)
+  const contract = JSON.parse(sources.get('release/next-release.json'))
+  // Mutation fixtures start from planned source copy even after the real
+  // checkout is admitted. The separate on-disk test validates its real phase.
+  if (contract.state === 'candidate-ready') {
+    contract.state = 'planned'
+    contract.candidateReady = false
+    for (const gate of contract.gates.slice(5)) {
+      gate.state = 'pending'
+      gate.evidence = []
+    }
+    sources.set('release/next-release.json', `${JSON.stringify(contract, null, 2)}\n`)
+    replace(sources, 'README.md', '`candidateReady: true`', '`candidateReady: false`')
+    replace(
+      sources,
+      'docs/src/content/docs/guide/status.md',
+      'Its `candidateReady` interlock is `true` after all seven pre-tag gates passed',
+      'Its `candidateReady` interlock remains `false` until all seven pre-tag gates pass',
+    )
+    replace(
+      sources,
+      'docs/src/content/docs/guide/status.md',
+      '7 of 8 admission gates now carry recorded evidence',
+      '5 of 8 admission gates now carry recorded evidence',
+    )
+    replace(sources, 'docs/src/app/components/Home.tsx', '7/8 admission gates verified', '5/8 admission gates verified')
+    replace(
+      sources,
+      'NPM_PUBLISH.md',
+      'It is currently `candidate-ready` with `candidateReady: true`',
+      'It is currently `planned` with `candidateReady: false`',
+    )
+    replace(
+      sources,
+      'CHANGELOG.md',
+      `Prerelease target \`${activeVersion}\` is candidate-ready with \`candidateReady: true\` after all seven pre-tag gates passed. Published stable identity remains immutable at \`${publishedStableVersion}\`.`,
+      `Planned prerelease target \`${activeVersion}\` is selected in \`release/next-release.json\` but remains unpublished with \`candidateReady: false\` until all seven pre-tag gates pass. Published stable identity remains immutable at \`${publishedStableVersion}\`.`,
+    )
+  }
+  return sources
 }
 
 function replace(sources, filename, current, replacement) {
@@ -821,6 +860,22 @@ test('all release, package, runtime, editor, container, formula, and documentati
     publishedStableVersion,
     surfaces: synchronizedSurfaceCount,
   })
+})
+
+test('planned mutation fixtures remain independent of an admitted on-disk source phase', () => {
+  const planned = cloneSources()
+  const admitted = new Map(planned)
+  setCandidateReadyPhase(admitted)
+  const admittedSnapshot = new Map(admitted)
+  const normalized = cloneSources(admitted)
+
+  assert.deepEqual(normalized, planned)
+  assert.deepEqual(admitted, admittedSnapshot, 'fixture normalization must not mutate the admitted sources')
+  assert.deepEqual(validateReleaseSources(normalized), validateReleaseSources(admitted))
+
+  const closed = cloneSources(admitted)
+  setClosedPhase(closed)
+  assert.deepEqual(validateReleaseSources(closed), validateReleaseSources(planned))
 })
 
 test('release version policy accepts state-aware candidate-ready and closed public copy', () => {

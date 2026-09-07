@@ -363,6 +363,8 @@ module.exports = {
 }
 ```
 
+Both Next.js gates first populate a private npm cache from the exact example lockfile, then repeat installation offline. Initial cache preparation is networked; subsequent installation does not depend on an ambient repository or developer cache.
+
 The same pinned example also exercises Next.js's explicit Webpack mode through one pre-loader rule:
 
 ```text

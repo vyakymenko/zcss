@@ -76,7 +76,7 @@
       "anchors": [
         {
           "path": "scripts/verify-turbopack-example.test.mjs",
-          "contains": ["Next 16.3.4 Turbopack example is a global-SCSS-only reuse of zigcss/webpack", "Turbopack example contract rejects aliases modules syntaxes PostCSS and mutable host versions", "current native ZigCSS completes offline Next 16.3.4 Turbopack maps cache invalidation and diagnostics", "fs.mkdtempSync(path.join(os.tmpdir(), 'zigcss-turbopack-'))", "['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund']", "ZIGCSS_TURBOPACK_NATIVE_BINARY", ".zigcss-current-native{color:#639}", ".zigcss-current-native{color:#7fff00}", "NATIVE0002"]
+          "contains": ["Next 16.3.4 Turbopack example is a global-SCSS-only reuse of zigcss/webpack", "Turbopack example contract rejects aliases modules syntaxes PostCSS and mutable host versions", "current native ZigCSS completes offline Next 16.3.4 Turbopack maps cache invalidation and diagnostics", "fs.mkdtempSync(path.join(os.tmpdir(), 'zigcss-turbopack-'))", "'ci', '--ignore-scripts', '--no-audit', '--no-fund'", "npm_config_cache: path.join(temporary, 'npm-cache')", "runCommand(npmCommand, [...commonArgs, '--prefer-offline']", "runCommand(npmCommand, [...commonArgs, '--offline']", "env: offlineEnvironment(temporary, trace, undefined, installEnv)", "ZIGCSS_TURBOPACK_NATIVE_BINARY", ".zigcss-current-native{color:#639}", ".zigcss-current-native{color:#7fff00}", "NATIVE0002"]
         },
         {
           "path": "examples/next-turbopack/next.config.js",

@@ -128,6 +128,7 @@ export function validateExampleContract(contract) {
   assert.match(contract.readme, /npm ci --ignore-scripts/)
   assert.match(contract.readme, /npm install --ignore-scripts --no-save --install-links=false \.\.\/\.\./)
   assert.match(contract.readme, /ZIGCSS_TURBOPACK_NATIVE_BINARY="\$PWD\/zig-out\/bin\/zigcss" npm run test:turbopack-example/)
+  assert.match(contract.readme, /warms a private npm cache from the exact example lock, then repeats\s+`npm ci` under its network-denying preload in strict offline mode/)
   assert.match(contract.readme, /does not claim CSS Modules, Sass-indented, Less, Stylus, arbitrary\s+SCSS entry globs, a `zigcss\/turbopack` export, a general Turbopack plugin, or\s+framework support beyond the pinned Next\.js host gate/)
   assert.match(contract.readme, /nextjs\.org\/docs\/app\/api-reference\/config\/next-config-js\/turbopack#module-types/)
   for (const anchor of [
@@ -186,11 +187,35 @@ function validateNativeBinary(input) {
   return input
 }
 
-function offlineEnvironment(root, trace, allowedBinary) {
+function installEnvironment(temporary, userConfig, inherited = process.env) {
+  const env = { ...inherited }
+  for (const name of Object.keys(env)) {
+    if (
+      /^npm_config_/i.test(name) || /^next_/i.test(name) ||
+      /^zigcss_turbopack_/i.test(name) ||
+      ['NODE_ENV', 'NODE_OPTIONS', 'SASS_PATH'].includes(name.toUpperCase())
+    ) delete env[name]
+  }
+  return {
+    ...env,
+    CI: '1',
+    NEXT_TELEMETRY_DISABLED: '1',
+    NO_COLOR: '1',
+    npm_config_audit: 'false',
+    npm_config_cache: path.join(temporary, 'npm-cache'),
+    npm_config_fund: 'false',
+    npm_config_ignore_scripts: 'true',
+    npm_config_registry: 'https://registry.npmjs.org/',
+    npm_config_update_notifier: 'false',
+    npm_config_userconfig: userConfig,
+  }
+}
+
+function offlineEnvironment(root, trace, allowedBinary, inherited = process.env) {
   const stagedPreload = path.join(root, path.basename(preload))
   fs.copyFileSync(preload, stagedPreload)
   return {
-    ...process.env,
+    ...inherited,
     CI: '1',
     NEXT_TELEMETRY_DISABLED: '1',
     NODE_OPTIONS: `--require=${JSON.stringify(fs.realpathSync(stagedPreload))}`,
@@ -205,6 +230,36 @@ function offlineEnvironment(root, trace, allowedBinary) {
     npm_config_offline: 'true',
     npm_config_update_notifier: 'false',
   }
+}
+
+function installPinnedHost(project, temporary, trace, runCommand = run) {
+  const userConfig = path.join(temporary, 'npmrc')
+  fs.writeFileSync(userConfig, 'audit=false\nfund=false\nignore-scripts=true\nupdate-notifier=false\n', {
+    flag: 'wx',
+    mode: 0o600,
+  })
+  const installEnv = installEnvironment(temporary, userConfig)
+  assert.equal(fs.existsSync(installEnv.npm_config_cache), false, 'host cache must begin private and empty')
+  const lockedFiles = ['package.json', 'package-lock.json']
+  const before = digestFiles(project, lockedFiles)
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const commonArgs = [
+    'ci', '--ignore-scripts', '--no-audit', '--no-fund',
+    '--registry=https://registry.npmjs.org/', '--fetch-timeout=20000', '--fetch-retries=2',
+  ]
+  const warmInstall = runCommand(npmCommand, [...commonArgs, '--prefer-offline'], {
+    cwd: project,
+    env: installEnv,
+  })
+  requireSuccess(warmInstall, 'isolated pinned Next.js host cache warmup')
+  fs.rmSync(path.join(project, 'node_modules'), { recursive: true, force: true })
+  const offlineInstall = runCommand(npmCommand, [...commonArgs, '--offline'], {
+    cwd: project,
+    env: offlineEnvironment(temporary, trace, undefined, installEnv),
+  })
+  requireSuccess(offlineInstall, 'offline pinned Next.js installation')
+  assert.deepEqual(digestFiles(project, lockedFiles), before, 'host installation must preserve both locked manifests')
+  return installEnv
 }
 
 function stageCurrentPackage(project, binary) {
@@ -322,6 +377,55 @@ test('documented local package install overrides a hostile npm install-links set
   const installed = path.join(temporary, 'node_modules', 'zigcss')
   assert.equal(fs.lstatSync(installed).isSymbolicLink(), true)
   assert.equal(fs.realpathSync(installed), fs.realpathSync(repositoryRoot))
+})
+
+test('Turbopack host proof warms its exact lock in a private cache before a guarded offline reinstall', t => {
+  const temporary = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'zigcss-turbopack-')))
+  t.after(() => fs.rmSync(temporary, { recursive: true, force: true }))
+  const project = path.join(temporary, 'project')
+  const trace = path.join(temporary, 'offline-trace.jsonl')
+  fs.cpSync(exampleRoot, project, { recursive: true })
+  fs.writeFileSync(trace, '')
+  const isolated = installEnvironment(temporary, path.join(temporary, 'npmrc'), {
+    PATH: '/preserved-path',
+    NPM_CONFIG_CACHE: '/ambient-cache',
+    npm_config_registry: 'https://registry.invalid/',
+    NPM_CONFIG_OFFLINE: 'true',
+    npm_config_omit: 'dev',
+    NODE_OPTIONS: '--inspect',
+    NEXT_PRIVATE_TEST_PROXY: 'ambient-next-state',
+    ZIGCSS_TURBOPACK_OFFLINE: '1',
+  })
+  assert.equal(isolated.PATH, '/preserved-path')
+  assert.equal(isolated.npm_config_cache, path.join(temporary, 'npm-cache'))
+  assert.equal(isolated.npm_config_registry, 'https://registry.npmjs.org/')
+  for (const name of ['NPM_CONFIG_CACHE', 'NPM_CONFIG_OFFLINE', 'npm_config_omit', 'NODE_OPTIONS', 'NEXT_PRIVATE_TEST_PROXY', 'ZIGCSS_TURBOPACK_OFFLINE']) {
+    assert.equal(isolated[name], undefined, `${name} must not influence host preparation`)
+  }
+
+  const invocations = []
+  installPinnedHost(project, temporary, trace, (command, args, options) => {
+    invocations.push({ command, args, options })
+    assert.equal(options.env.npm_config_cache, path.join(temporary, 'npm-cache'))
+    assert.equal(options.cwd, project)
+    assert.equal(fs.existsSync(path.join(project, 'node_modules')), false)
+    if (invocations.length === 1) {
+      assert(args.includes('--prefer-offline'))
+      assert(!args.includes('--offline'))
+      assert.equal(options.env.NODE_OPTIONS, undefined)
+      assert.equal(options.env.npm_config_offline, undefined)
+      fs.mkdirSync(path.join(project, 'node_modules'))
+    } else {
+      assert(args.includes('--offline'))
+      assert.equal(options.env.npm_config_offline, 'true')
+      assert.equal(options.env.ZIGCSS_TURBOPACK_OFFLINE, '1')
+      assert.equal(options.env.NODE_OPTIONS, `--require=${JSON.stringify(path.join(temporary, path.basename(preload)))}`)
+      assert.equal(options.env.ZIGCSS_TURBOPACK_TRACE, trace)
+    }
+    return { status: 0, signal: null, stdout: '', stderr: '' }
+  })
+  assert.equal(invocations.length, 2)
+  assert.deepEqual(invocations[0].args.slice(0, -1), invocations[1].args.slice(0, -1))
 })
 
 test('Turbopack example contract rejects aliases modules syntaxes PostCSS and mutable host versions', () => {
@@ -559,13 +663,7 @@ test('current native ZigCSS completes offline Next 16.3.4 Turbopack maps cache i
   try {
     fs.cpSync(exampleRoot, project, { recursive: true })
     fs.writeFileSync(trace, '')
-    const installEnv = offlineEnvironment(temporary, trace)
-    const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-    const install = run(npmCommand, ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], {
-      cwd: project,
-      env: installEnv,
-    })
-    requireSuccess(install, 'offline pinned Next.js installation')
+    const installEnv = installPinnedHost(project, temporary, trace)
 
     const installedPackage = stageCurrentPackage(project, binary)
     const installedBinary = path.join(
@@ -573,7 +671,7 @@ test('current native ZigCSS completes offline Next 16.3.4 Turbopack maps cache i
       'bin',
       process.platform === 'win32' ? 'zigcss.exe' : 'zigcss',
     )
-    const env = offlineEnvironment(temporary, trace, installedBinary)
+    const env = offlineEnvironment(temporary, trace, installedBinary, installEnv)
     const resolution = run(process.execPath, ['-e', "process.stdout.write(require.resolve('zigcss/webpack'))"], {
       cwd: project,
       env,

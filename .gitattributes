@@ -1,6 +1,10 @@
 # Official Sass-spec fixtures intentionally exercise trailing and blank-line whitespace.
 tests/preprocessors/sass/corpus/cases/** -whitespace
 
+# npm bin-links rewrites CRLF hashbangs; keep executable bytes identical at install.
+install.js text eol=lf
+index.js text eol=lf
+
 # Native conformance preserves authored text-fixture bytes across every checkout host.
 VERSION text eol=lf
 native-integrity.json text eol=lf

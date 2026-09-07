@@ -95,7 +95,8 @@
         "The complete Debug, ReleaseSafe, package, consumer, builder, documentation, and audit gates pass for the candidate source."
       ],
       "evidence": [
-        "Local validation passed on 2026-09-03: Debug and ReleaseSafe completed 1728/1728 tests each; the final combined Node suite completed 407/407 with no skips; package, consumer, builder, editor, dependency, container, and audit gates passed; exact Nix 2.35.2 completed sandboxed aarch64-linux flake check, build, install checks, and run."
+        "Local validation passed on 2026-09-03: Debug and ReleaseSafe completed 1728/1728 tests each; the final combined Node suite completed 407/407 with no skips; package, consumer, builder, editor, dependency, container, and audit gates passed; exact Nix 2.35.2 completed sandboxed aarch64-linux flake check, build, install checks, and run.",
+        "Follow-up validation on 2026-09-07 passed 25/25 release smoke tests, reproduced and rejected the npm CRLF hashbang mutation, and passed real macOS archive installation plus 28/28 current-native Turbopack, Next.js Webpack, SvelteKit, Astro, Nuxt, and Parcel checks without skips. Candidate-ready transition regressions passed 19/19 version and 19/19 admission tests; hosted Windows confirmation remains required."
       ]
     },
     {
@@ -105,7 +106,8 @@
         "The candidate documentation tests, production build, served bundle, container smoke, and stable-versus-current identity boundary pass."
       ],
       "evidence": [
-        "Documentation validation passed on 2026-09-03: 228/228 tests, production, SEO, bundle, 33-file served-bundle, container, and desktop/mobile browser checks preserved the unpublished 0.7.0-rc.1 versus stable 0.6.0 identity boundary; after CodeQL and descriptor-bound static-server hardening, the 2026-09-06 rerun passed 246/246 tests, production, SEO, bundle, and the exact 33-file served-bundle gate."
+        "Documentation validation passed on 2026-09-03: 228/228 tests, production, SEO, bundle, 33-file served-bundle, container, and desktop/mobile browser checks preserved the unpublished 0.7.0-rc.1 versus stable 0.6.0 identity boundary; after CodeQL and descriptor-bound static-server hardening, the 2026-09-06 rerun passed 246/246 tests, production, SEO, bundle, and the exact 33-file served-bundle gate.",
+        "The 2026-09-07 follow-up passed 247/247 documentation tests, production build, 11 SEO pages, 10 sitemap URLs, the 103.5 KiB gzip landing JavaScript budget, and exact delivery of all 33 served files; the builder guide documents private exact-lock cache preparation without claiming offline bootstrap."
       ]
     },
     {
